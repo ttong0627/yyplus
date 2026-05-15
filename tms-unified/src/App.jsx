@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
 import { 
   Menu, X, Search, Bell, Settings, LogOut, LayoutDashboard, Database, 
-  Users, MapPin, Box, ShoppingCart, Truck, Calendar, FileText, ChevronDown, CheckCircle2, Factory, Wrench, Activity
+  Users, MapPin, Box, ShoppingCart, Truck, Calendar, FileText, ChevronDown, CheckCircle2, Factory, Wrench, Activity, Receipt
 } from 'lucide-react';
 import { collection, onSnapshot, getDocs, getCountFromServer, query, where } from 'firebase/firestore';
 import { db } from './firebase';
@@ -220,19 +220,20 @@ function DashboardHome() {
       try {
         const today = new Date().toISOString().split('T')[0];
         
-        // 🚀 DB 전체 긁어오기(통조회) 방지 -> 서버단에서 개수(Count)만 집계 & 필요한 날짜만 쿼리(Where)
+        // 🚨 Firebase 보안 규칙(RunAggregationQuery 403 권한 에러) 우회를 위해 getDocs + where 혼합 방식으로 롤백
+        // 전체 통조회를 막기 위해 clientOrders는 오늘 날짜만 가져오도록 Where 절 유지
         const [oSnap, iSnap, cSnap, invSnap] = await Promise.all([
-          getCountFromServer(query(collection(db, 'clientOrders'), where('date', '==', today))),
-          getCountFromServer(collection(db, 'items')),
-          getCountFromServer(collection(db, 'clients')),
-          getCountFromServer(collection(db, 'invoices'))
+          getDocs(query(collection(db, 'clientOrders'), where('date', '==', today))),
+          getDocs(collection(db, 'items')),
+          getDocs(collection(db, 'clients')),
+          getDocs(collection(db, 'invoices'))
         ]);
         
         setStats({
-          orders: oSnap.data().count,
-          items: iSnap.data().count,
-          clinics: cSnap.data().count,
-          invoices: invSnap.data().count
+          orders: oSnap.size,
+          items: iSnap.size,
+          clinics: cSnap.size,
+          invoices: invSnap.size
         });
       } catch (error) {
         console.error("Dashboard fetch error:", error);
