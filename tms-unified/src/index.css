@@ -8,3 +8,49 @@
 body {
   @apply bg-gray-50 text-gray-900;
 }
+
+/* =========================================================================
+   GLOBAL_PRINT_STYLE (강력 서식)
+   - 브라우저 인쇄(Ctrl+P) 시 UI 요소(버튼, 메뉴 등) 숨김
+   - 백그라운드 컬러 강제 출력 (print-color-adjust)
+   - A4 가로(landscape) 기본 지정
+========================================================================= */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+  
+  body {
+    background-color: white !important;
+    font-size: 11pt !important;
+  }
+
+  /* 인쇄 시 숨겨야 할 UI 요소들 (TopBar, Sidebar, Button 등) */
+  .no-print, header, nav, button, .sidebar-container {
+    display: none !important;
+  }
+
+  /* 색상 강제 출력 */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* 표 테두리 및 가독성 최적화 */
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+  
+  th, td {
+    border: 1px solid #000 !important;
+    padding: 4px 6px !important;
+    word-break: keep-all;
+  }
+  
+  /* 페이지 잘림 방지 */
+  tr {
+    page-break-inside: avoid;
+  }
+}

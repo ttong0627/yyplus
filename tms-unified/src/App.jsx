@@ -7,6 +7,10 @@ import { auth } from './firebase';
 import Login from './pages/Login';
 import LogisticsModule from './pages/Logistics';
 import BillingModule from './pages/Billing';
+import SystemAdmin from './pages/SystemAdmin';
+import MasterData from './pages/MasterData';
+import OrderManagement from './pages/OrderManagement';
+import WorkOrder from './pages/WorkOrder';
 
 const menuData = [
   {
@@ -276,14 +280,26 @@ export default function App() {
             <div className="max-w-7xl mx-auto">
               <Routes>
                 <Route path="/" element={<DashboardHome />} />
+                {/* Basic Master Data Route Map */}
+                <Route path="/basic/*" element={<MasterData />} />
+                
+                {/* Order Management Route Map */}
+                <Route path="/order/*" element={<OrderManagement />} />
+                
+                {/* Work Order (Task) Route Map */}
+                <Route path="/task/*" element={<WorkOrder />} />
+                
                 {/* Logistics Route Map */}
                 <Route path="/logistics/*" element={<LogisticsModule />} />
                 {/* Billing Route Map */}
                 <Route path="/billing/*" element={<BillingModule />} />
                 
+                {/* System Admin Route */}
+                <Route path="/system/check" element={<SystemAdmin />} />
+                
                 {/* Fallback mapping for newly created menu items */}
                 {menuData.map(group => group.items.map(item => (
-                   item.path.startsWith('/logistics') || item.path.startsWith('/billing') 
+                   item.path.startsWith('/logistics') || item.path.startsWith('/billing') || item.path.startsWith('/basic') || item.path.startsWith('/order') || item.path.startsWith('/task') || item.path === '/system/check'
                      ? null 
                      : <Route key={item.path} path={item.path} element={<PlaceholderModule title={item.name} desc="기능 준비 중입니다." />} />
                 )))}
