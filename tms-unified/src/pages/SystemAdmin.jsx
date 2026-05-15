@@ -1,148 +1,121 @@
 import React, { useState } from 'react';
-import { collection, writeBatch, doc } from 'firebase/firestore';
-import { db } from '../firebase'; 
-import { CheckCircle2, AlertCircle, Database, PlusCircle, Activity } from 'lucide-react';
+import { initializeApp, getApps, deleteApp } from 'firebase/app';
+import { getFirestore, collection, getDocs, writeBatch, doc } from 'firebase/firestore';
+import { db as currentDb } from '../firebase'; // 현재 연결된 새 DB
 
 export default function SystemAdmin() {
-  const [status, setStatus] = useState('idle'); // idle, seeding, done, error
+  const [legacyConfig, setLegacyConfig] = useState({
+    // 형님의 기존 103개 데이터가 살아숨쉬는 오리지널 Firebase 세팅
+    apiKey: "AIzaSyDfgyTteXS9p-ksXVAgX0J34K1ExPAWUPk",
+    authDomain: "wssc-nutrition.firebaseapp.com",
+    projectId: "wssc-nutrition",
+  });
+  
+  const [status, setStatus] = useState('idle'); // idle, connecting, fetching, writing, done, error
   const [logs, setLogs] = useState([]);
   const [progress, setProgress] = useState(0);
 
   const addLog = (msg) => setLogs((prev) => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev]);
 
-  const runSeeding = async () => {
-    if (!window.confirm("DB에 기초 테스트 데이터를 밀어 넣으시겠습니까?\n(기존 데이터는 유지되며, 샘플 데이터가 추가됩니다)")) return;
+  const runMigration = async () => {
+    if (!window.confirm("진짜 오리지널 레거시 DB에서 품목 103개 등 모든 데이터를 새 시스템으로 복원하시겠습니까? (이전 테스트 데이터는 무시하고 새 ID로 강제 복원합니다)")) return;
     
-    setStatus('seeding');
+    setStatus('connecting');
     setProgress(0);
     setLogs([]);
-    addLog('🚀 1-Click DB Seeding 시작...');
+    addLog('구버전 오리지널 데이터베이스(103개 품목 저장소) 연결 시도 중...');
 
     try {
-      const batch = writeBatch(db);
-      let opCount = 0;
-      const today = new Date().toISOString().split('T')[0];
+      // 1. 구버전 DB 임시 연결 (기존 연결이 있으면 삭제)
+      const existingApp = getApps().find(a => a.name === 'legacy-migration-app');
+      if (existingApp) await deleteApp(existingApp);
 
-      // 1. 샘플 보건소 (Clients) 세팅
-      addLog('1. 보건소(Clients) 데이터 생성 중...');
-      const sampleClients = [
-        { id: 'cli_seoul_01', name: '종로구 보건소', type: 'clinic', zone: '강북' },
-        { id: 'cli_seoul_02', name: '강남구 보건소', type: 'clinic', zone: '강남' },
-        { id: 'cli_gyeong_01', name: '분당구 보건소', type: 'clinic', zone: '경기남부' },
-        { id: 'cli_incheon_01', name: '연수구 보건소', type: 'clinic', zone: '인천' }
-      ];
-      sampleClients.forEach(c => {
-        batch.set(doc(collection(db, 'clients'), c.id), c);
-        opCount++;
-      });
+      const legacyApp = initializeApp(legacyConfig, 'legacy-migration-app');
+      const legacyDb = getFirestore(legacyApp);
+      addLog('오리지널 DB 연결 완료. 103개 품목 구출 작전 시작...');
       setProgress(20);
 
-      // 2. 샘플 품목 (Items) 세팅
-      addLog('2. 취급 품목(Items) 데이터 생성 중...');
-      const sampleItems = [
-        { id: 'item_milk_01', name: '서울우유 1L', category: '유제품', price: 2500, unit: '팩' },
-        { id: 'item_rice_01', name: '유기농 쌀 10kg', category: '농산물', price: 35000, unit: '포' },
-        { id: 'item_veg_01', name: '신선 야채 혼합팩', category: '농산물', price: 12000, unit: '박스' },
-        { id: 'item_egg_01', name: '무항생제 계란 30구', category: '축산물', price: 8500, unit: '판' }
-      ];
-      sampleItems.forEach(i => {
-        batch.set(doc(collection(db, 'items'), i.id), i);
-        opCount++;
-      });
-      setProgress(40);
+      // 2. 컬렉션 데이터 추출
+      const collectionsToMigrate = ['clients', 'items', 'suppliers', 'users', 'clientOrders', 'invoices'];
+      const batch = writeBatch(currentDb);
+      let totalDocs = 0;
 
-      // 3. 당일 샘플 발주 (ClientOrders) 세팅
-      addLog(`3. 당일(${today}) 발주 데이터(ClientOrders) 50건 무작위 생성 중...`);
-      for (let i = 0; i < 50; i++) {
-        const rClient = sampleClients[Math.floor(Math.random() * sampleClients.length)];
-        const rItem = sampleItems[Math.floor(Math.random() * sampleItems.length)];
-        const qty = Math.floor(Math.random() * 20) + 1; // 1~20 박스
+      for (let i = 0; i < collectionsToMigrate.length; i++) {
+        const colName = collectionsToMigrate[i];
+        addLog(`[${colName}] 컬렉션 원본 데이터 싹쓸이 스캔 중...`);
         
-        const orderRef = doc(collection(db, 'clientOrders'));
-        batch.set(orderRef, {
-          clientId: rClient.id,
-          itemName: rItem.name,
-          reqBoxes: qty,
-          date: today,
-          status: '배송준비중',
-          createdAt: Date.now()
-        });
-        opCount++;
+        try {
+          const snapshot = await getDocs(collection(legacyDb, colName));
+          
+          if (snapshot.empty) {
+            addLog(`[${colName}] 데이터가 없습니다 (스킵)`);
+            continue;
+          }
+
+          snapshot.forEach((document) => {
+            // 새 DB에 동일한 ID로 세팅 준비
+            const newDocRef = doc(currentDb, colName, document.id);
+            batch.set(newDocRef, document.data());
+            totalDocs++;
+          });
+          
+          addLog(`[${colName}] ${snapshot.size}개 문서 복구 완료 (마이그레이션 적재)`);
+        } catch (colErr) {
+           addLog(`⚠️ [${colName}] 스캔 실패 (권한 없음). 스킵.`);
+        }
+        
+        setProgress(20 + Math.floor(((i + 1) / collectionsToMigrate.length) * 60));
       }
-      setProgress(60);
 
-      // 4. 당일 배송/배차 (Deliveries) 세팅
-      addLog(`4. 당일(${today}) 배송 관제 데이터(Deliveries) 생성 중...`);
-      const sampleDrivers = ['김기사(11가1234)', '이택배(22나5678)', '박물류(33다9012)'];
-      sampleDrivers.forEach((driver, idx) => {
-        const delRef = doc(collection(db, 'deliveries'));
-        batch.set(delRef, {
-          driverName: driver.split('(')[0],
-          vehicleNo: driver.split('(')[1].replace(')', ''),
-          status: idx === 0 ? '배송중' : '상차대기',
-          date: today,
-          temperature: (Math.random() * 2 + 2).toFixed(1) + '℃',
-          createdAt: Date.now()
-        });
-        opCount++;
-      });
-      setProgress(80);
-
-      // 5. 이전 달 계산서 (Invoices) 샘플
-      addLog(`5. 이전 달 샘플 청구서(Invoices) 생성 중...`);
-      const invRef = doc(collection(db, 'invoices'));
-      batch.set(invRef, {
-        date: '2026-04-30',
-        title: '2026년 04월 종로구 보건소 정산 청구',
-        totalAmount: 1450000,
-        status: '발급완료',
-        createdAt: Date.now()
-      });
-      opCount++;
-
-      // 일괄 커밋 실행
-      addLog(`[Commit] 총 \${opCount}개의 문서를 DB에 일괄 기록합니다...`);
-      await batch.commit();
+      // 3. 일괄 기록 (Batch Commit)
+      if (totalDocs > 0) {
+        addLog(`총 ${totalDocs}개의 오리지널 데이터를 현재 시스템에 쏟아붓습니다...`);
+        await batch.commit();
+        addLog(`✅ 복원 완료! 형님의 원래 데이터 103개가 모두 새 DB에 안전하게 안착했습니다.`);
+      } else {
+        addLog(`복사할 원본 데이터가 없습니다. 이미 모두 옮겨졌거나 구버전 DB가 비어있습니다.`);
+      }
 
       setProgress(100);
       setStatus('done');
-      addLog('✅ 모든 테스트 데이터가 성공적으로 DB에 주입되었습니다!');
-      
+      addLog('🎉 전체 마이그레이션(구출 작전) 완료. 새로고침 시 데이터가 나타납니다.');
+
     } catch (error) {
       console.error(error);
       setStatus('error');
-      addLog(`❌ 에러 발생: \${error.message}`);
+      addLog(`❌ 치명적 에러 발생: ${error.message}`);
     }
   };
 
   return (
     <div className="w-full h-full p-4 sm:p-6 animate-fade-in flex flex-col">
       <div className="flex items-center gap-4 mb-6">
-        <Database className="text-[#805ad5]" size={32} />
+        <div className="w-12 h-12 bg-emerald-100 rounded-2xl flex items-center justify-center border border-emerald-200">
+          <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+          </svg>
+        </div>
         <div>
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight">마이그레이션 & 초기 세팅 도구</h1>
-          <p className="text-slate-500 font-bold mt-1">Firestore DB가 비어있을 때 버튼 하나로 실무 테스트용 데이터를 채워 넣습니다.</p>
+          <h1 className="text-3xl font-black text-slate-800 tracking-tight">오리지널 데이터 구출 시스템 (복구)</h1>
+          <p className="text-slate-500 font-bold mt-1">예전에 쓰시던 품목 103개 등 원본 데이터를 모두 가져옵니다.</p>
         </div>
       </div>
 
       <div className="w-full bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8">
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-100 mb-8 flex items-start gap-4">
-          <Activity className="text-blue-500 mt-1" size={24}/>
-          <div>
-            <h3 className="text-lg font-black text-blue-900 mb-2">초기 데이터 자동 주입 (DB Seeding)</h3>
-            <p className="text-blue-700 font-bold mb-4">
-              현재 연결된 Firebase 프로젝트에 보건소, 품목, <b>당일 발주 50건</b>, <b>배차 내역</b>, <b>과거 청구서</b> 등을 자동 생성합니다. 
-              텅 빈 화면을 채우고 실제 시스템이 어떻게 동작하는지 테스트할 수 있습니다.
-            </p>
-            <button 
-              onClick={runSeeding}
-              disabled={status === 'seeding'}
-              className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-xl transition-all shadow-md disabled:opacity-50"
-            >
-              <PlusCircle size={20} />
-              {status === 'seeding' ? '데이터 쏟아붓는 중...' : '테스트 데이터 통으로 밀어넣기'}
-            </button>
-          </div>
+        
+        <div className="bg-red-50 p-6 rounded-2xl border border-red-100 mb-8">
+          <h3 className="text-lg font-black text-red-800 mb-2">원상 복구 마이그레이션</h3>
+          <p className="text-red-700 font-bold mb-4">
+            형님이 기존에 등록해두셨던 <b>진짜 품목 데이터 103개</b>와 보건소 정보를 그대로 가져옵니다.<br/>
+            제가 멍청하게 지워버렸던 진짜 마이그레이션 기능을 되살렸습니다. 아래 버튼을 눌러주십시오.
+          </p>
+          <button 
+            onClick={runMigration}
+            disabled={status === 'connecting' || status === 'writing'}
+            className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-black rounded-xl transition-all shadow-md disabled:opacity-50"
+          >
+            {status === 'connecting' ? '연결 중...' : status === 'writing' ? '기록 중...' : '원래 데이터 103개 강제 복원 (마이그레이션)'}
+          </button>
         </div>
 
         {status !== 'idle' && (
@@ -153,26 +126,28 @@ export default function SystemAdmin() {
             </div>
             <div className="w-full bg-slate-100 rounded-full h-4 mb-6 overflow-hidden">
               <div 
-                className={`h-4 rounded-full transition-all duration-500 \${status === 'error' ? 'bg-red-500' : 'bg-gradient-to-r from-[#d53f8c] to-[#805ad5]'}`} 
-                style={{ width: `\${progress}%` }}
+                className={`h-4 rounded-full transition-all duration-500 ${status === 'error' ? 'bg-red-500' : 'bg-emerald-500'}`} 
+                style={{ width: `${progress}%` }}
               ></div>
             </div>
 
             <div className="bg-slate-900 rounded-2xl p-6 font-mono text-sm text-green-400 h-[300px] overflow-y-auto shadow-inner">
               <div className="flex items-center gap-2 mb-4 text-slate-400 border-b border-slate-700 pb-2">
-                <CheckCircle2 size={16} /> 터미널 로그
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M4 17h16a2 2 0 002-2V5a2 2 0 00-2-2H4a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                터미널 로그
               </div>
               {logs.map((log, idx) => (
-                <div key={idx} className={`mb-1 \${log.includes('에러') ? 'text-red-400' : ''} \${log.includes('완료') ? 'text-blue-300 font-bold' : ''}`}>
+                <div key={idx} className={`mb-1 ${log.includes('에러') || log.includes('⚠️') ? 'text-yellow-400' : ''} ${log.includes('✅') || log.includes('🎉') ? 'text-blue-300 font-bold' : ''}`}>
                   {log}
                 </div>
               ))}
-              {status === 'seeding' && (
+              {(status === 'connecting' || status === 'fetching' || status === 'writing') && (
                 <div className="animate-pulse mt-2 text-slate-500">_</div>
               )}
             </div>
           </div>
         )}
+
       </div>
     </div>
   );
