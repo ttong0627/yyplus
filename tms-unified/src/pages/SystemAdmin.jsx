@@ -127,18 +127,15 @@ export default function SystemAdmin() {
         {/* 보안 규칙 안내 */}
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
           <p className="text-sm font-black text-blue-700">📋 버튼 클릭 전 필수 확인사항</p>
-          <p className="text-xs text-blue-600 mt-1 font-mono bg-blue-100 p-2 rounded mt-2 leading-relaxed">
-            Firebase Console → wellshare-tms → Firestore → Rules 탭<br/>
-            아래 규칙으로 변경 후 [Publish] 클릭:<br/><br/>
-            rules_version = '2';<br/>
-            service cloud.firestore {'{'}<br/>
-            &nbsp;&nbsp;match /databases/{'{'}_database{'}'}/documents {'{'}<br/>
-            &nbsp;&nbsp;&nbsp;&nbsp;match /{'{''}'}document=**{'}'} {'{'}<br/>
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;allow read, write: if true;<br/>
-            &nbsp;&nbsp;&nbsp;&nbsp;{'}'}<br/>
-            &nbsp;&nbsp;{'}'}<br/>
-            {'}'}
-          </p>
+          <p className="text-xs text-blue-600 mt-1">Firebase Console → wellshare-tms → Firestore → Rules 탭에서 아래 내용으로 변경 후 [Publish] 클릭:</p>
+          <pre className="text-xs text-blue-800 bg-blue-100 p-3 rounded mt-2 leading-relaxed overflow-auto whitespace-pre-wrap">{`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}`}</pre>
         </div>
 
         {/* 버튼 영역 */}
