@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { initializeApp, getApps, deleteApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, writeBatch, doc } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, writeBatch, doc, getDoc } from 'firebase/firestore';
 import { db as newDb } from '../firebase'; // 통합 메인 DB (wellshare-tms)
 
 const LEGACY_CONFIGS = [
@@ -64,36 +64,93 @@ export default function SystemAdmin() {
       addLog(`구 DB [${legacyCfg.label}] 연결 성공`);
       setProgress(10);
 
-      // 2. 컬렉션별 복사
-      for (let i = 0; i < COLLECTIONS_TO_MIGRATE.length; i++) {
-        const { from, to, label } = COLLECTIONS_TO_MIGRATE[i];
-        addLog(`[${label}] 읽는 중... (${from} → ${to})`);
+      // 2. 구버전 DB는 모든 데이터를 단일 문서 안 JSON으로 저장
+      //    경로: artifacts/{appId}/public/data/erp_sync/main_state
+      const APP_IDS_TO_TRY = ['default-app-id', 'wssc-erp-v2', 'wssc-work-order', 'local-app'];
+      let mainState = null;
 
+      for (const tryId of APP_IDS_TO_TRY) {
         try {
-          const snap = await getDocs(collection(legacyDb, from));
-          if (snap.empty) {
-            addLog(`[${label}] 원본 없음 - 건너뜀`, 'warn');
+          const stateRef = doc(legacyDb, 'artifacts', tryId, 'public', 'data', 'erp_sync', 'main_state');
+          const stateSnap = await getDoc(stateRef);
+          if (stateSnap.exists()) {
+            mainState = stateSnap.data();
+            addLog(`원본 데이터 발견! (appId: ${tryId})`, 'success');
+            break;
+          } else {
+            addLog(`[${tryId}] 경로에 데이터 없음`, 'warn');
+          }
+        } catch(e) {
+          addLog(`[${tryId}] 접근 오류: ${e.message}`, 'warn');
+        }
+      }
+
+      setProgress(30);
+
+      if (mainState) {
+        // 단일 문서에서 배열 추출 후 각 컬렉션에 삽입
+        const EMBED_MAP = [
+          { key: 'items',        to: 'items',     label: '품목(마스터)', idKey: 'id' },
+          { key: 'clients',     to: 'clients',   label: '보건소',       idKey: 'id' },
+          { key: 'suppliers',   to: 'partners',  label: '거래처',       idKey: 'id' },
+          { key: 'users',       to: 'users',     label: '사용자',       idKey: 'id' },
+          { key: 'clientOrders',to: 'orders',    label: '발주내역',     idKey: 'id' },
+          { key: 'inventory',   to: 'inventory', label: '재고',         idKey: 'id' },
+        ];
+        for (let i = 0; i < EMBED_MAP.length; i++) {
+          const { key, to, label, idKey } = EMBED_MAP[i];
+          const arr = mainState[key];
+          if (!arr || arr.length === 0) {
+            addLog(`[${label}] 데이터 없음 - 건너뜀`, 'warn');
             migrSummary[label] = 0;
           } else {
-            const docs = snap.docs;
-            let written = 0;
-            for (let bStart = 0; bStart < docs.length; bStart += 499) {
-              const batch = writeBatch(newDb);
-              docs.slice(bStart, bStart + 499).forEach(d => {
-                batch.set(doc(newDb, to, d.id), d.data(), { merge: true });
-              });
-              await batch.commit();
-              written += Math.min(499, docs.length - bStart);
+            try {
+              for (let bStart = 0; bStart < arr.length; bStart += 499) {
+                const batch = writeBatch(newDb);
+                arr.slice(bStart, bStart + 499).forEach(item => {
+                  const docId = item[idKey] ? String(item[idKey]) : doc(collection(newDb, to)).id;
+                  batch.set(doc(newDb, to, docId), item, { merge: true });
+                });
+                await batch.commit();
+              }
+              addLog(`[${label}] ${arr.length}개 완료!`, 'success');
+              migrSummary[label] = arr.length;
+            } catch(e) {
+              addLog(`[${label}] 쓰기 오류: ${e.message}`, 'error');
+              migrSummary[label] = '오류';
             }
-            addLog(`[${label}] ${written}개 완료!`, 'success');
-            migrSummary[label] = written;
           }
-        } catch (colErr) {
-          addLog(`[${label}] 오류: ${colErr.message}`, 'error');
-          migrSummary[label] = '오류';
+          setProgress(30 + Math.floor(((i + 1) / EMBED_MAP.length) * 65));
         }
-
-        setProgress(10 + Math.floor(((i + 1) / COLLECTIONS_TO_MIGRATE.length) * 85));
+      } else {
+        // fallback: 일반 최상위 컬렉션 시도
+        addLog('단일 문서 없음 → 일반 컬렉션 방식으로 재시도...', 'warn');
+        const COLS = [
+          { from:'items', to:'items', label:'품목(마스터)' },
+          { from:'clients', to:'clients', label:'보건소' },
+          { from:'suppliers', to:'partners', label:'거래처' },
+          { from:'clientOrders', to:'orders', label:'발주내역' },
+        ];
+        for (let i = 0; i < COLS.length; i++) {
+          const { from, to, label } = COLS[i];
+          try {
+            const snap = await getDocs(collection(legacyDb, from));
+            if (!snap.empty) {
+              const batch = writeBatch(newDb);
+              snap.docs.forEach(d => batch.set(doc(newDb, to, d.id), d.data(), { merge: true }));
+              await batch.commit();
+              addLog(`[${label}] ${snap.size}개 완료!`, 'success');
+              migrSummary[label] = snap.size;
+            } else {
+              addLog(`[${label}] 원본 없음`, 'warn');
+              migrSummary[label] = 0;
+            }
+          } catch(e) {
+            addLog(`[${label}] 오류: ${e.message}`, 'error');
+            migrSummary[label] = '오류';
+          }
+          setProgress(30 + Math.floor(((i + 1) / COLS.length) * 65));
+        }
       }
 
       setProgress(100);
