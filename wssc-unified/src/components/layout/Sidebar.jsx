@@ -25,8 +25,9 @@ const MENUS = [
       { id:'purchase',     label:'구매요청',       icon:'File',  path:'/erp/purchase',      roles:['admin','office'] },
       { id:'receipt',      label:'입고 확인',      icon:'Down',  path:'/erp/receipt',       roles:['admin','logistics'] },
       { id:'settlement',   label:'자동 정산/청구', icon:'Card',  path:'/erp/settlement',    roles:['admin','office'] },
-      { id:'payment',      label:'대금 정산',      icon:'Card',  path:'/erp/payment',       roles:['admin','office'] },
-      { id:'system',       label:'시스템 점검',    icon:'Serv',  path:'/erp/system',        roles:['admin'] },
+      { id:'payment',       label:'대금 정산',     icon:'Card',  path:'/erp/payment',         roles:['admin','office'] },
+      { id:'clinicBill',   label:'보건소 청구',   icon:'File',  path:'/erp/clinic-billing', roles:['admin','office'] },
+      { id:'system',       label:'시스템 점검',   icon:'Serv',  path:'/erp/system',          roles:['admin'] },
     ],
   },
   {

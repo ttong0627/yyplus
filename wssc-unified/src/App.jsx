@@ -23,6 +23,7 @@ import ReceiptPage from './pages/erp/ReceiptPage';
 import WorkOrderPage from './pages/erp/WorkOrderPage';
 import SettlementPage from './pages/erp/SettlementPage';
 import PaymentPage from './pages/erp/PaymentPage';
+import ClinicBillingPage from './pages/erp/ClinicBillingPage';
 import SystemPage from './pages/erp/SystemPage';
 
 // 패키지
@@ -80,8 +81,9 @@ function AppInner() {
           <Route path="/erp/receipt"      element={<ProtectedRoute roles={['admin','logistics']}><ReceiptPage /></ProtectedRoute>} />
           <Route path="/erp/work-order"   element={<ProtectedRoute roles={['admin','office']}><WorkOrderPage /></ProtectedRoute>} />
           <Route path="/erp/settlement"   element={<ProtectedRoute roles={['admin','office']}><SettlementPage /></ProtectedRoute>} />
-          <Route path="/erp/payment"      element={<ProtectedRoute roles={['admin','office']}><PaymentPage /></ProtectedRoute>} />
-          <Route path="/erp/system"       element={<ProtectedRoute roles={['admin']}><SystemPage /></ProtectedRoute>} />
+          <Route path="/erp/payment"         element={<ProtectedRoute roles={['admin','office']}><PaymentPage /></ProtectedRoute>} />
+          <Route path="/erp/clinic-billing" element={<ProtectedRoute roles={['admin','office']}><ClinicBillingPage /></ProtectedRoute>} />
+          <Route path="/erp/system"          element={<ProtectedRoute roles={['admin']}><SystemPage /></ProtectedRoute>} />
 
           {/* 패키지 */}
           <Route path="/package/calendar" element={<ProtectedRoute roles={['admin','office','logistics']}><PkgCalendarPage /></ProtectedRoute>} />
