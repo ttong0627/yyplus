@@ -18,7 +18,6 @@ const MENUS = [
       { id:'contracts',    label:'보건소 계약',    icon:'FileD', path:'/erp/contracts',     roles:['admin','office'] },
       { id:'priceMap',     label:'단가 매칭',      icon:'File',  path:'/erp/price-mapping', roles:['admin','office'] },
       { id:'schedule',     label:'작업/배송 일정', icon:'Cal',   path:'/erp/schedule',      roles:['admin','office','logistics'] },
-      { id:'roster',       label:'명단 관리',      icon:'Users', path:'/erp/roster',        roles:['admin','office'] },
       { id:'itemMap',      label:'품목 매칭',      icon:'ChkSq', path:'/erp/item-mapping',  roles:['admin','office'] },
       { id:'orders',       label:'발주 청구 관리',  icon:'Clip',  path:'/erp/orders',        roles:['admin','office'] },
       { id:'orderSum',     label:'AI 집계(참고)',  icon:'ListP', path:'/erp/order-summary', roles:['admin','office'] },
@@ -45,6 +44,7 @@ const MENUS = [
     id: 'delivery', label: '배송 관리', icon: 'Truck', roles: ['admin','office','logistics','driver'],
     children: [
       { id:'delBlk',  label:'배송블럭/순번',   icon:'Map',   path:'/delivery/blocks',  roles:['admin','logistics'] },
+      { id:'roster',  label:'명단 관리',       icon:'Users', path:'/erp/roster',       roles:['admin','office'] },
       { id:'delLoad', label:'상차 지시서',     icon:'Truck', path:'/delivery/loading', roles:['admin','office','logistics'] },
       { id:'delStat', label:'실시간 배송상태', icon:'ListO', path:'/delivery/status',  roles:['admin','office','logistics'] },
       { id:'delPort', label:'수령 확인증',     icon:'File',  path:'/delivery/portal',  roles:['admin','office'] },
