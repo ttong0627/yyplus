@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
 import { 
   Menu, X, Search, Bell, Settings, LogOut, LayoutDashboard, Database, 
@@ -14,6 +14,7 @@ import SystemAdmin from './pages/SystemAdmin';
 import MasterData from './pages/MasterData';
 import { OrderRegister, OrderSummary } from './pages/OrderManagement';
 import WorkOrder from './pages/WorkOrder';
+import OrderMatching from './pages/OrderMatching';
 
 const menuData = [
   {
@@ -329,63 +330,6 @@ export default function App() {
   );
 }
 
-
-// =========================================================================
-// 품목매칭 - 매달 발주 품목 매칭 설정
-// =========================================================================
-function OrderMatching() {
-  const [items, setItems] = React.useState([]);
-  const [clients, setClients] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-  const [targetMonth, setTargetMonth] = React.useState(new Date().toISOString().slice(0,7));
-
-  React.useEffect(() => {
-    const unsubI = onSnapshot(collection(db, 'items'), snap => { setItems(snap.docs.map(d => ({id:d.id,...d.data()}))); });
-    const unsubC = onSnapshot(collection(db, 'clients'), snap => { setClients(snap.docs.map(d => ({id:d.id,...d.data()}))); setLoading(false); });
-    return () => { unsubI(); unsubC(); };
-  }, []);
-
-  return (
-    <div className="flex flex-col h-full animate-fade-in">
-      <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-        <div className="flex items-center gap-3">
-          <FileCheck2 className="text-indigo-500" size={20}/>
-          <h2 className="text-lg font-black text-slate-800">품목매칭</h2>
-          <span className="text-xs text-slate-500 font-bold">매달 발주 품목을 보건소별로 매칭합니다</span>
-        </div>
-        <input type="month" value={targetMonth} onChange={e => setTargetMonth(e.target.value)} className="px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold outline-none" />
-      </div>
-      <div className="flex-1 overflow-auto p-4">
-        {loading ? <div className="text-center text-slate-400 p-10">불러오는 중...</div> : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-xs">
-              <thead>
-                <tr className="bg-indigo-50">
-                  <th className="p-2 text-left font-black text-slate-600 border border-slate-200 min-w-[140px] sticky left-0 bg-indigo-50">품목명</th>
-                  <th className="p-2 text-center font-black text-slate-600 border border-slate-200 min-w-[60px]">분류</th>
-                  {clients.map(c => <th key={c.id} className="p-2 text-center font-black text-slate-600 border border-slate-200 min-w-[70px]">{c.shortName||c.name}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item, i) => (
-                  <tr key={i} className="hover:bg-indigo-50/30 transition-colors">
-                    <td className="p-2 border border-slate-100 font-bold text-slate-800 sticky left-0 bg-white">{item.name}</td>
-                    <td className="p-2 border border-slate-100 text-center text-slate-500">{item.category||'-'}</td>
-                    {clients.map(c => (
-                      <td key={c.id} className="p-2 border border-slate-100 text-center">
-                        <input type="number" min="0" placeholder="0" className="w-14 text-center border border-slate-200 rounded px-1 py-0.5 text-xs font-bold focus:border-indigo-400 outline-none" />
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // =========================================================================
 // 구매요청 - 거래처별 박스 단위 발주 요청
