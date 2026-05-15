@@ -9,17 +9,15 @@ import { Utils } from '../Utils';
 // 공통 물류/배송 관리 컨테이너
 // =========================================================================
 export default function LogisticsModule() {
-  const location = useLocation();
-  const navigate = useNavigate();
-
   return (
     <div className="w-full h-full p-4 sm:p-6 animate-fade-in flex flex-col">
-      {/* Content Area - Flattened 100% Height */}
       <div className="w-full h-full bg-white/70 backdrop-blur-md rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/80 overflow-hidden flex flex-col relative">
          <Routes>
-           <Route path="/" element={<Navigate to="/logistics/tracking" replace />} />
-           <Route path="tracking" element={<DeliveryTracking />} />
+           <Route path="/" element={<Navigate to="/logistics/loading" replace />} />
+           <Route path="schedule" element={<DeliveryScheduleView />} />
+           <Route path="block" element={<DeliveryBlockView />} />
            <Route path="loading" element={<LoadingOrder />} />
+           <Route path="tracking" element={<DeliveryTracking />} />
            <Route path="receipt" element={<DeliveryReceipt />} />
          </Routes>
       </div>
@@ -307,6 +305,107 @@ function DeliveryReceipt() {
                </button>
             </div>
           ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// =========================================================================
+// 배송일정 뷰 - 보건소별 배송 일정 협의 달력
+// =========================================================================
+function DeliveryScheduleView() {
+  const [clients, setClients] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  React.useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'clients'), snap => {
+      setClients(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.name||'').localeCompare(b.name||'')));
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+  return (
+    <div className="flex flex-col h-full animate-fade-in">
+      <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
+        <MapPin className="text-blue-500" size={20}/>
+        <h2 className="text-lg font-black text-slate-800">배송일정 (보건소별 협의 시간)</h2>
+      </div>
+      <div className="flex-1 overflow-auto p-4">
+        {loading ? <div className="text-center text-slate-400 p-10">불러오는 중...</div> : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead><tr className="bg-slate-50">
+                <th className="p-3 text-left font-black text-slate-600 border border-slate-200">보건소</th>
+                <th className="p-3 text-left font-black text-slate-600 border border-slate-200">담당자</th>
+                <th className="p-3 text-left font-black text-slate-600 border border-slate-200">연락처</th>
+                <th className="p-3 text-left font-black text-slate-600 border border-slate-200">검수시간</th>
+                <th className="p-3 text-left font-black text-slate-600 border border-slate-200">검수장소</th>
+              </tr></thead>
+              <tbody>
+                {clients.map((c, i) => (
+                  <tr key={i} className="hover:bg-blue-50/50 transition-colors">
+                    <td className="p-3 border border-slate-100 font-bold text-slate-800">{c.name}</td>
+                    <td className="p-3 border border-slate-100 text-slate-600">{c.manager || '-'}</td>
+                    <td className="p-3 border border-slate-100 text-slate-600">{c.contact || '-'}</td>
+                    <td className="p-3 border border-slate-100 font-bold text-blue-700">{c.inspectTime || '-'}</td>
+                    <td className="p-3 border border-slate-100 text-slate-600">{c.inspectLocation || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// =========================================================================
+// 배송블럭/순번 뷰 - 기사별 배송순번 관리
+// =========================================================================
+function DeliveryBlockView() {
+  const [deliveries, setDeliveries] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [targetDate, setTargetDate] = React.useState(new Date().toISOString().split('T')[0]);
+  React.useEffect(() => {
+    setLoading(true);
+    const q = query(collection(db, 'deliveries'), where('date', '==', targetDate));
+    const unsub = onSnapshot(q, snap => {
+      setDeliveries(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    }, () => setLoading(false));
+    return () => unsub();
+  }, [targetDate]);
+  return (
+    <div className="flex flex-col h-full animate-fade-in">
+      <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+        <div className="flex items-center gap-3"><Truck className="text-indigo-500" size={20}/><h2 className="text-lg font-black text-slate-800">배송블럭/순번</h2></div>
+        <input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} className="px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold outline-none" />
+      </div>
+      <div className="flex-1 overflow-auto p-4">
+        {loading ? <div className="text-center text-slate-400 p-10">불러오는 중...</div>
+         : deliveries.length === 0 ? <div className="text-center text-slate-400 p-10">해당 날짜의 배송 배차 데이터가 없습니다.<br/><span className="text-xs">배송관제 탭에서 배차를 먼저 등록하세요.</span></div>
+         : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead><tr className="bg-slate-50">
+                <th className="p-3 text-left font-black text-slate-600 border border-slate-200">순번</th>
+                <th className="p-3 text-left font-black text-slate-600 border border-slate-200">기사명</th>
+                <th className="p-3 text-left font-black text-slate-600 border border-slate-200">보건소</th>
+                <th className="p-3 text-left font-black text-slate-600 border border-slate-200">배송상태</th>
+              </tr></thead>
+              <tbody>
+                {deliveries.sort((a,b) => (a.seq||0)-(b.seq||0)).map((d, i) => (
+                  <tr key={i} className="hover:bg-indigo-50/50">
+                    <td className="p-3 border border-slate-100 font-black text-indigo-700">{d.seq || i+1}</td>
+                    <td className="p-3 border border-slate-100 font-bold">{d.driverName || d.driver || '-'}</td>
+                    <td className="p-3 border border-slate-100">{d.clientName || d.client || '-'}</td>
+                    <td className="p-3 border border-slate-100"><span className={`px-2 py-1 rounded-full text-xs font-black ${d.status === 'done' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{d.status === 'done' ? '완료' : '배송중'}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

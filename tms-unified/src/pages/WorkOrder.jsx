@@ -14,13 +14,13 @@ export default function WorkOrder() {
 
   return (
     <div className="w-full h-full p-4 sm:p-6 animate-fade-in flex flex-col">
-      {/* Content Area - Flattened 100% Height */}
       <div className="w-full h-full bg-white/70 backdrop-blur-md rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/80 overflow-hidden flex flex-col relative">
          <Routes>
-           <Route path="/" element={<Navigate to="/task/subdivide" replace />} />
-           <Route path="subdivide" element={<WorkMatrixView />} />
+           <Route path="/" element={<Navigate to="/task/schedule" replace />} />
            <Route path="schedule" element={<WorkSchedule />} />
-           {/* 기타 하위 라우트들 추가 가능 */}
+           <Route path="subdivide" element={<WorkMatrixView />} />
+           <Route path="package" element={<PackageOrderView />} />
+           <Route path="data" element={<ClassifyDataView />} />
          </Routes>
       </div>
     </div>
@@ -226,6 +226,124 @@ function WorkSchedule() {
              )
           })}
        </div>
+    </div>
+  );
+}
+
+// =========================================================================
+// 패키지지시서
+// =========================================================================
+function PackageOrderView() {
+  const [targetDate, setTargetDate] = React.useState(new Date().toISOString().split('T')[0]);
+  const [packages, setPackages] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+  React.useEffect(() => {
+    setLoading(true);
+    const fetchData = async () => {
+      try {
+        const [snapOrders, snapClients] = await Promise.all([
+          getDocs(query(collection(db, 'clientOrders'), where('date', '==', targetDate))),
+          getDocs(collection(db, 'clients'))
+        ]);
+        const clientsMap = {};
+        snapClients.docs.forEach(d => { clientsMap[d.id] = d.data().name; });
+        const grouped = {};
+        snapOrders.docs.forEach(d => {
+          const o = d.data();
+          if (!grouped[o.clientId]) grouped[o.clientId] = { clientName: clientsMap[o.clientId] || o.clientId, items: [] };
+          grouped[o.clientId].items.push({ name: o.itemName, qty: o.reqBoxes });
+        });
+        setPackages(Object.values(grouped).sort((a,b) => a.clientName.localeCompare(b.clientName)));
+      } catch(e) { console.error(e); } finally { setLoading(false); }
+    };
+    fetchData();
+  }, [targetDate]);
+  return (
+    <div className="flex flex-col h-full animate-fade-in">
+      <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+        <h2 className="text-lg font-black text-slate-800">패키지 지시서</h2>
+        <div className="flex gap-2">
+          <input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} className="px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold shadow-sm outline-none" />
+          <button onClick={() => window.print()} className="flex items-center gap-2 px-5 py-2 bg-purple-600 text-white font-black rounded-xl text-sm hover:bg-purple-700"><Printer size={16}/> 인쇄</button>
+        </div>
+      </div>
+      <div className="flex-1 overflow-auto p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {loading ? <div className="col-span-full text-center text-slate-400 p-10">불러오는 중...</div>
+         : packages.length === 0 ? <div className="col-span-full text-center text-slate-400 p-10">해당 날짜에 발주 내역이 없습니다.</div>
+         : packages.map((pkg, i) => (
+          <div key={i} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+            <h3 className="font-black text-slate-800 text-lg border-b pb-3 mb-3">{pkg.clientName}</h3>
+            <div className="space-y-2">
+              {pkg.items.map((it, j) => (
+                <div key={j} className="flex justify-between text-sm font-bold">
+                  <span className="text-slate-600">{it.name}</span>
+                  <span className="text-purple-600">{it.qty} Box</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// =========================================================================
+// 분류데이터
+// =========================================================================
+function ClassifyDataView() {
+  const [targetDate, setTargetDate] = React.useState(new Date().toISOString().split('T')[0]);
+  const [classData, setClassData] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+  React.useEffect(() => {
+    setLoading(true);
+    const fetchData = async () => {
+      try {
+        const [snapOrders, snapItems] = await Promise.all([
+          getDocs(query(collection(db, 'clientOrders'), where('date', '==', targetDate))),
+          getDocs(collection(db, 'items'))
+        ]);
+        const itemsMap = {};
+        snapItems.docs.forEach(d => { const data = d.data(); itemsMap[data.name] = data.category || '미분류'; });
+        const catMap = {};
+        snapOrders.docs.forEach(d => {
+          const o = d.data();
+          const cat = itemsMap[o.itemName] || '미분류';
+          if (!catMap[cat]) catMap[cat] = { category: cat, total: 0, items: {} };
+          catMap[cat].total += Number(o.reqBoxes) || 0;
+          catMap[cat].items[o.itemName] = (catMap[cat].items[o.itemName] || 0) + (Number(o.reqBoxes) || 0);
+        });
+        setClassData(Object.values(catMap).sort((a,b) => b.total - a.total));
+      } catch(e) { console.error(e); } finally { setLoading(false); }
+    };
+    fetchData();
+  }, [targetDate]);
+  return (
+    <div className="flex flex-col h-full animate-fade-in">
+      <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+        <h2 className="text-lg font-black text-slate-800">분류 데이터</h2>
+        <input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} className="px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold shadow-sm outline-none" />
+      </div>
+      <div className="flex-1 overflow-auto p-4 space-y-4">
+        {loading ? <div className="text-center text-slate-400 p-10">불러오는 중...</div>
+         : classData.length === 0 ? <div className="text-center text-slate-400 p-10">데이터 없음</div>
+         : classData.map((cat, i) => (
+          <div key={i} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+            <div className="flex justify-between items-center mb-3 border-b pb-3">
+              <h3 className="font-black text-teal-700 text-lg">{cat.category}</h3>
+              <span className="font-black text-2xl text-slate-800">{cat.total} Box</span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {Object.entries(cat.items).map(([name, qty], j) => (
+                <div key={j} className="bg-teal-50 rounded-lg px-3 py-2 text-sm font-bold flex justify-between">
+                  <span className="text-slate-600 truncate">{name}</span>
+                  <span className="text-teal-700 ml-2">{qty}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

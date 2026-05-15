@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
 import { 
   Menu, X, Search, Bell, Settings, LogOut, LayoutDashboard, Database, 
-  Users, MapPin, Box, ShoppingCart, Truck, Calendar, FileText, ChevronDown, CheckCircle2, Factory, Wrench, Activity, Receipt
+  Users, MapPin, Box, ShoppingCart, Truck, Calendar, FileText, ChevronDown, CheckCircle2, Factory, Wrench, Activity, Receipt, FileCheck2
 } from 'lucide-react';
 import { collection, onSnapshot, getDocs, getCountFromServer, query, where } from 'firebase/firestore';
 import { db } from './firebase';
@@ -206,14 +206,19 @@ function AppContent() {
             <Routes>
               <Route path="/" element={<DashboardHome />} />
               
-              {/* 🌟 1-Click Flattened Routes for Order Management */}
+              {/* 발주관리 */}
+              <Route path="/order/matching" element={<OrderMatching />} />
               <Route path="/order/register" element={<OrderRegister />} />
+              <Route path="/order/request" element={<OrderRequest />} />
+              <Route path="/order/receive" element={<OrderReceive />} />
               <Route path="/order/ai-summary" element={<OrderSummary />} />
               
+              {/* 기초자료, 작업, 물류, 정산, 시스템 */}
               <Route path="/basic/*" element={<MasterData />} />
               <Route path="/task/*" element={<WorkOrder />} />
               <Route path="/logistics/*" element={<LogisticsModule />} />
               <Route path="/billing/*" element={<BillingModule />} />
+              <Route path="/billing/partners" element={<BillingModule />} />
               <Route path="/system/check" element={<SystemAdmin />} />
             </Routes>
           </div>
@@ -324,3 +329,171 @@ export default function App() {
   );
 }
 
+
+// =========================================================================
+// 품목매칭 - 매달 발주 품목 매칭 설정
+// =========================================================================
+function OrderMatching() {
+  const [items, setItems] = React.useState([]);
+  const [clients, setClients] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [targetMonth, setTargetMonth] = React.useState(new Date().toISOString().slice(0,7));
+
+  React.useEffect(() => {
+    const unsubI = onSnapshot(collection(db, 'items'), snap => { setItems(snap.docs.map(d => ({id:d.id,...d.data()}))); });
+    const unsubC = onSnapshot(collection(db, 'clients'), snap => { setClients(snap.docs.map(d => ({id:d.id,...d.data()}))); setLoading(false); });
+    return () => { unsubI(); unsubC(); };
+  }, []);
+
+  return (
+    <div className="flex flex-col h-full animate-fade-in">
+      <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <FileCheck2 className="text-indigo-500" size={20}/>
+          <h2 className="text-lg font-black text-slate-800">품목매칭</h2>
+          <span className="text-xs text-slate-500 font-bold">매달 발주 품목을 보건소별로 매칭합니다</span>
+        </div>
+        <input type="month" value={targetMonth} onChange={e => setTargetMonth(e.target.value)} className="px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold outline-none" />
+      </div>
+      <div className="flex-1 overflow-auto p-4">
+        {loading ? <div className="text-center text-slate-400 p-10">불러오는 중...</div> : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-xs">
+              <thead>
+                <tr className="bg-indigo-50">
+                  <th className="p-2 text-left font-black text-slate-600 border border-slate-200 min-w-[140px] sticky left-0 bg-indigo-50">품목명</th>
+                  <th className="p-2 text-center font-black text-slate-600 border border-slate-200 min-w-[60px]">분류</th>
+                  {clients.map(c => <th key={c.id} className="p-2 text-center font-black text-slate-600 border border-slate-200 min-w-[70px]">{c.shortName||c.name}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, i) => (
+                  <tr key={i} className="hover:bg-indigo-50/30 transition-colors">
+                    <td className="p-2 border border-slate-100 font-bold text-slate-800 sticky left-0 bg-white">{item.name}</td>
+                    <td className="p-2 border border-slate-100 text-center text-slate-500">{item.category||'-'}</td>
+                    {clients.map(c => (
+                      <td key={c.id} className="p-2 border border-slate-100 text-center">
+                        <input type="number" min="0" placeholder="0" className="w-14 text-center border border-slate-200 rounded px-1 py-0.5 text-xs font-bold focus:border-indigo-400 outline-none" />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// =========================================================================
+// 구매요청 - 거래처별 박스 단위 발주 요청
+// =========================================================================
+function OrderRequest() {
+  const [partners, setPartners] = React.useState([]);
+  const [items, setItems] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [targetDate, setTargetDate] = React.useState(new Date().toISOString().split('T')[0]);
+  const { collection: firestoreCollection, onSnapshot: firestoreOnSnapshot } = { collection, onSnapshot };
+
+  React.useEffect(() => {
+    const unsubP = onSnapshot(collection(db, 'partners'), snap => { setPartners(snap.docs.map(d => ({id:d.id,...d.data()}))); });
+    const unsubI = onSnapshot(collection(db, 'items'), snap => { setItems(snap.docs.map(d => ({id:d.id,...d.data()}))); setLoading(false); });
+    return () => { unsubP(); unsubI(); };
+  }, []);
+
+  const grouped = {};
+  items.forEach(item => {
+    const sid = item.supplierId || '미지정';
+    if (!grouped[sid]) grouped[sid] = { partnerName: (partners.find(p=>p.id===sid)||{}).name || sid, items: [] };
+    grouped[sid].items.push(item);
+  });
+
+  return (
+    <div className="flex flex-col h-full animate-fade-in">
+      <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+        <div className="flex items-center gap-3"><ShoppingCart className="text-pink-500" size={20}/><h2 className="text-lg font-black text-slate-800">구매요청</h2></div>
+        <input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} className="px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold outline-none" />
+      </div>
+      <div className="flex-1 overflow-auto p-4 space-y-4">
+        {loading ? <div className="text-center text-slate-400 p-10">불러오는 중...</div>
+         : Object.values(grouped).map((g, i) => (
+          <div key={i} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+            <h3 className="font-black text-slate-800 text-base border-b pb-3 mb-3 text-pink-700">{g.partnerName}</h3>
+            <table className="w-full text-sm">
+              <thead><tr className="bg-slate-50"><th className="p-2 text-left font-black border border-slate-100">품목</th><th className="p-2 text-center font-black border border-slate-100">분류</th><th className="p-2 text-center font-black border border-slate-100">박스단가</th><th className="p-2 text-center font-black border border-slate-100">요청 수량(Box)</th></tr></thead>
+              <tbody>
+                {g.items.map((it, j) => (
+                  <tr key={j} className="hover:bg-pink-50/30">
+                    <td className="p-2 border border-slate-100 font-bold">{it.name}</td>
+                    <td className="p-2 border border-slate-100 text-center text-slate-500">{it.category||'-'}</td>
+                    <td className="p-2 border border-slate-100 text-center">{(it.unitPrice||0).toLocaleString()}원</td>
+                    <td className="p-2 border border-slate-100 text-center"><input type="number" min="0" placeholder="0" className="w-16 text-center border border-slate-200 rounded px-1 py-0.5 font-bold focus:border-pink-400 outline-none" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// =========================================================================
+// 입고확인 - 거래처 납품 내역 확인
+// =========================================================================
+function OrderReceive() {
+  const [orders, setOrders] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [targetDate, setTargetDate] = React.useState(new Date().toISOString().split('T')[0]);
+
+  React.useEffect(() => {
+    setLoading(true);
+    const q = query(collection(db, 'clientOrders'), where('date', '==', targetDate));
+    const unsub = onSnapshot(q, snap => {
+      const grouped = {};
+      snap.docs.forEach(d => {
+        const o = d.data();
+        const key = o.supplierId || '미지정';
+        if (!grouped[key]) grouped[key] = { supplierName: o.supplierName || key, items: [] };
+        grouped[key].items.push({ ...o, fbId: d.id });
+      });
+      setOrders(Object.values(grouped));
+      setLoading(false);
+    }, () => setLoading(false));
+    return () => unsub();
+  }, [targetDate]);
+
+  return (
+    <div className="flex flex-col h-full animate-fade-in">
+      <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+        <div className="flex items-center gap-3"><CheckCircle2 className="text-emerald-500" size={20}/><h2 className="text-lg font-black text-slate-800">입고확인</h2></div>
+        <input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} className="px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold outline-none" />
+      </div>
+      <div className="flex-1 overflow-auto p-4 space-y-4">
+        {loading ? <div className="text-center text-slate-400 p-10">불러오는 중...</div>
+         : orders.length === 0 ? <div className="text-center text-slate-400 p-10">해당 날짜의 발주/입고 내역이 없습니다.</div>
+         : orders.map((g, i) => (
+          <div key={i} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+            <h3 className="font-black text-emerald-700 text-base border-b pb-3 mb-3">{g.supplierName}</h3>
+            <table className="w-full text-sm">
+              <thead><tr className="bg-slate-50"><th className="p-2 text-left font-black border border-slate-100">품목</th><th className="p-2 text-center font-black border border-slate-100">발주(Box)</th><th className="p-2 text-center font-black border border-slate-100">입고(Box)</th><th className="p-2 text-center font-black border border-slate-100">상태</th></tr></thead>
+              <tbody>
+                {g.items.map((it, j) => (
+                  <tr key={j} className="hover:bg-emerald-50/30">
+                    <td className="p-2 border border-slate-100 font-bold">{it.itemName}</td>
+                    <td className="p-2 border border-slate-100 text-center font-bold text-slate-700">{it.reqBoxes}</td>
+                    <td className="p-2 border border-slate-100 text-center"><input type="number" min="0" defaultValue={it.receivedBoxes||it.reqBoxes} className="w-16 text-center border border-slate-200 rounded px-1 py-0.5 font-bold focus:border-emerald-400 outline-none" /></td>
+                    <td className="p-2 border border-slate-100 text-center"><span className={`px-2 py-1 rounded-full text-xs font-black ${it.received ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{it.received ? '입고완료' : '미입고'}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
