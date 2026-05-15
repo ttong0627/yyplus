@@ -1,149 +1,355 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Utils } from '../../utils';
-import { Ic } from '../../components/common/Icons';
 
 export default function ItemMappingPage() {
-  const { st, updateSt, showToast, globalMonth } = useApp();
-  const [selectedClient, setSelectedClient] = useState('');
-  const [editing, setEditing] = useState(false);
-  const [editRows, setEditRows] = useState([]);
+  const { st, updateSt, globalMonth, showToast } = useApp();
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [targetMonth, setTargetMonth] = useState(globalMonth);
 
-  const clients = st.clients || [];
-  const items = useMemo(() => Utils.sortItems(st.items || [], st.categorySortOrder || []), [st.items, st.categorySortOrder]);
+  const clients = [...(st.clients || [])].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
+  const items = st.items || [];
+  const mappings = st.mappings || [];
 
-  const mapping = useMemo(() =>
-    (st.mappings || []).find(m => m.clientId === selectedClient && m.month === globalMonth),
-    [st.mappings, selectedClient, globalMonth]
-  );
-
-  const startEdit = () => {
-    const rows = items.map(item => {
-      const existing = mapping?.mappedItems?.find(m => m.itemId === item.id);
-      return {
-        uid: existing?.uid || Utils.genId(),
-        itemId: item.id,
-        itemName: item.name,
-        category: item.category,
-        unit: item.unit,
-        clientItemName: existing?.clientItemName || item.name,
-        orderUnit: existing?.orderUnit || 1,
-        enabled: !!existing,
-      };
-    });
-    setEditRows(rows);
-    setEditing(true);
+  const getMappedItems = (clientId) => {
+    const m = mappings.find(x => x.clientId === clientId && x.month === targetMonth);
+    if (m?.mappedItems?.length > 0) return m.mappedItems;
+    // fallback: 가장 최근 매칭 데이터
+    const all = mappings.filter(x => x.clientId === clientId).sort((a, b) => (b.month || '').localeCompare(a.month || ''));
+    return all[0]?.mappedItems || [];
   };
 
-  const save = () => {
-    const list = st.mappings || [];
-    const mappedItems = editRows.filter(r => r.enabled).map(r => ({
-      uid: r.uid, itemId: r.itemId, clientItemName: r.clientItemName, orderUnit: Number(r.orderUnit) || 1
-    }));
-    const existing = list.find(m => m.clientId === selectedClient && m.month === globalMonth);
+  const isMapped = (clientId) => {
+    const m = mappings.find(x => x.clientId === clientId && x.month === targetMonth);
+    return (m?.mappedItems?.length || 0) > 0;
+  };
+
+  const saveMappingForClient = (clientId, mappedItems) => {
+    const list = mappings;
+    const existing = list.find(x => x.clientId === clientId && x.month === targetMonth);
     if (existing) {
-      updateSt('mappings', list.map(m => (m.clientId === selectedClient && m.month === globalMonth) ? {...m, mappedItems} : m));
+      updateSt('mappings', list.map(x => x.id === existing.id ? { ...x, mappedItems, updatedAt: new Date().toISOString() } : x));
     } else {
-      updateSt('mappings', [...list, { id:`MAP${Date.now()}`, clientId:selectedClient, month:globalMonth, mappedItems }]);
+      updateSt('mappings', [...list, { id: Utils.genId(), clientId, month: targetMonth, mappedItems, updatedAt: new Date().toISOString() }]);
     }
-    setEditing(false);
     showToast('품목 매칭이 저장되었습니다.', 'success');
   };
 
-  const copyFromPrev = () => {
-    const [y, m] = globalMonth.split('-').map(Number);
-    const prevMonth = `${m === 1 ? y-1 : y}-${String(m === 1 ? 12 : m-1).padStart(2,'0')}`;
-    const prev = (st.mappings || []).find(m => m.clientId === selectedClient && m.month === prevMonth);
-    if (!prev) return showToast('이전달 매칭 데이터가 없습니다.', 'warn');
-    const rows = items.map(item => {
-      const prevMapped = prev.mappedItems?.find(p => p.itemId === item.id);
-      const current = editRows.find(r => r.itemId === item.id);
-      return current ? {
-        ...current,
-        clientItemName: prevMapped?.clientItemName || item.name,
-        orderUnit: prevMapped?.orderUnit || 1,
-        enabled: !!prevMapped,
-      } : current;
-    }).filter(Boolean);
-    setEditRows(rows);
-    showToast('이전달 매칭을 불러왔습니다.', 'success');
+  return (
+    <div className="flex flex-col h-full animate-fade-in relative" style={{ minHeight: 0 }}>
+      {/* 헤더 */}
+      <div className="p-5 flex justify-between items-center flex-wrap gap-3 flex-none"
+        style={{ borderBottom: '1px solid rgba(99,102,241,0.15)' }}>
+        <div>
+          <h2 className="text-xl font-black text-white">보건소 전용 품목 매칭</h2>
+          <p className="text-sm font-bold mt-1" style={{ color: '#64748b' }}>선택한 월에 맞춰 각 기관별로 마스터 품목을 매칭합니다.</p>
+        </div>
+        <div className="flex items-center gap-2 px-4 py-2 rounded-xl"
+          style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)' }}>
+          <span className="text-xs font-bold" style={{ color: '#64748b' }}>작업 기준월:</span>
+          <input
+            type="month"
+            value={targetMonth}
+            onChange={e => setTargetMonth(e.target.value)}
+            className="border-none text-sm font-black bg-transparent outline-none"
+            style={{ color: '#a5b4fc' }}
+          />
+        </div>
+      </div>
+
+      {/* 보건소 카드 그리드 */}
+      <div className="flex-1 overflow-y-auto p-5 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {clients.length === 0 && (
+          <div className="col-span-full text-center py-20 font-bold" style={{ color: '#475569' }}>보건소 데이터가 없습니다. 보건소 관리에서 먼저 등록해 주세요.</div>
+        )}
+        {clients.map(c => {
+          const mapped = isMapped(c.id);
+          const count = getMappedItems(c.id).length;
+          return (
+            <div
+              key={c.id}
+              onClick={() => setSelectedClient(c)}
+              className="group relative p-5 rounded-2xl cursor-pointer flex flex-col gap-3 overflow-hidden transition-all duration-300 hover:-translate-y-1"
+              style={{
+                background: mapped ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.03)',
+                border: mapped ? '1px solid rgba(99,102,241,0.35)' : '1px solid rgba(255,255,255,0.06)',
+                boxShadow: mapped ? '0 4px 20px rgba(99,102,241,0.15)' : '0 2px 8px rgba(0,0,0,0.2)',
+              }}
+            >
+              <div className="absolute -right-6 -top-6 w-24 h-24 rounded-full transition-transform duration-500 group-hover:scale-150 opacity-10"
+                style={{ background: mapped ? '#818cf8' : '#475569' }} />
+              <div className="flex items-center gap-3 relative z-10">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl font-black shadow-inner transition-colors"
+                  style={{ background: mapped ? 'rgba(99,102,241,0.2)' : 'rgba(71,85,105,0.3)', color: mapped ? '#a5b4fc' : '#64748b' }}>
+                  🏥
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-black text-[13px] truncate" style={{ color: '#e2e8f0' }}>{c.name}</h3>
+                  {c.shortName && <p className="text-xs font-bold truncate" style={{ color: '#64748b' }}>{c.shortName}</p>}
+                </div>
+              </div>
+              <div className="relative z-10 flex justify-end">
+                <span className="text-[11px] font-bold px-3 py-1 rounded-full"
+                  style={mapped
+                    ? { background: 'rgba(99,102,241,0.15)', color: '#a5b4fc', border: '1px solid rgba(99,102,241,0.3)' }
+                    : { background: 'rgba(71,85,105,0.2)', color: '#64748b', border: '1px solid rgba(71,85,105,0.3)' }}>
+                  {mapped ? `✅ 매칭 완료 (${count}개)` : '⚠️ 매칭 필요'}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 매칭 상세 편집 모달 */}
+      {selectedClient && (
+        <MappingModal
+          client={selectedClient}
+          month={targetMonth}
+          masterItems={items}
+          initialRows={getMappedItems(selectedClient.id)}
+          onSave={(rows) => saveMappingForClient(selectedClient.id, rows)}
+          onClose={() => setSelectedClient(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// =========================================================================
+// 매칭 편집 모달
+// =========================================================================
+function MappingModal({ client, month, masterItems, initialRows, onSave, onClose }) {
+  const [rows, setRows] = useState(() => {
+    if (initialRows?.length > 0) {
+      return initialRows.map(r => ({ ...r, uid: r.uid || Utils.genId() }));
+    }
+    return Array(5).fill(0).map((_, i) => ({ uid: `U_${Date.now()}_${i}`, itemId: '', clientItemName: '', orderUnit: 1 }));
+  });
+
+  const saveAndClose = () => {
+    onSave(rows.filter(r => r.itemId || r.clientItemName));
+    onClose();
+  };
+
+  const addRow = () => setRows(prev => [{ uid: Utils.genId(), itemId: '', clientItemName: '', orderUnit: 1 }, ...prev]);
+  const delRow = (uid) => setRows(prev => prev.filter(r => r.uid !== uid));
+  const moveRow = (i, dir) => {
+    const nx = [...rows];
+    const t = dir === 'u' ? i - 1 : i + 1;
+    if (t < 0 || t >= nx.length) return;
+    [nx[i], nx[t]] = [nx[t], nx[i]];
+    setRows(nx);
+  };
+  const copyRow = (r, i) => {
+    const nx = [...rows];
+    nx.splice(i + 1, 0, { ...r, uid: Utils.genId() });
+    setRows(nx);
+  };
+  const loadAllItems = () => {
+    const ni = masterItems.map(it => ({ uid: Utils.genId(), itemId: it.id, clientItemName: it.name, orderUnit: 1 }));
+    setRows(prev => [...prev, ...ni]);
+  };
+  const handleExcel = () => {
+    if (rows.length === 0) return alert('다운로드할 데이터가 없습니다.');
+    let html = `<table><thead><tr><th>순번</th><th>마스터품목명</th><th>보건소전용명칭</th><th>단위</th><th>발주단위</th></tr></thead><tbody>`;
+    rows.forEach((r, i) => {
+      const m = masterItems.find(x => x.id === r.itemId);
+      html += `<tr><td>${i + 1}</td><td class="l">${m?.name || ''}</td><td class="l">${r.clientItemName || ''}</td><td>${m?.unit || ''}</td><td>${r.orderUnit || 1}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    Utils.dlExcelCustom(html, `품목매칭_${client.shortName || client.name}_${month}`);
+  };
+  const updateRow = (uid, field, value) => {
+    setRows(prev => prev.map(r => r.uid === uid ? { ...r, [field]: value } : r));
   };
 
   return (
-    <div className="space-y-4 max-w-5xl">
-      <h1 className="text-xl font-black text-white">품목 매칭 — {globalMonth}</h1>
-
-      <div className="card">
-        <div className="flex flex-wrap gap-3 items-center mb-4">
-          <select value={selectedClient} onChange={e => { setSelectedClient(e.target.value); setEditing(false); }} className="input-base w-64">
-            <option value="">보건소 선택</option>
-            {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-          {selectedClient && !editing && (
-            <button onClick={startEdit} className="btn-primary flex items-center gap-1.5">{Ic.Edit} 매칭 편집</button>
-          )}
-          {editing && (
-            <>
-              <button onClick={copyFromPrev} className="btn-secondary flex items-center gap-1.5">{Ic.Copy} 이전달 불러오기</button>
-              <button onClick={save} className="btn-success flex items-center gap-1.5">{Ic.Save} 저장</button>
-              <button onClick={() => setEditing(false)} className="btn-secondary">취소</button>
-            </>
-          )}
+    <div className="absolute inset-0 z-[9999] flex justify-center items-center p-4"
+      style={{ background: 'rgba(5,8,20,0.75)', backdropFilter: 'blur(4px)' }}>
+      <div className="flex flex-col w-full max-w-5xl mx-auto rounded-[2rem] shadow-2xl border max-h-[92vh]"
+        style={{ background: '#0d1224', border: '1px solid rgba(99,102,241,0.25)' }}>
+        {/* 모달 헤더 */}
+        <div className="flex-none px-7 py-5 flex justify-between items-center flex-wrap gap-3 rounded-t-[2rem] relative"
+          style={{ borderBottom: '1px solid rgba(99,102,241,0.15)', background: '#0a0f22' }}>
+          <h3 className="text-xl font-black flex items-center gap-2" style={{ color: '#a5b4fc' }}>
+            🏥 [{client.name}] 전용 품목 세팅
+            <span className="text-sm px-3 py-1 rounded-full font-black" style={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8' }}>{month} 기준</span>
+          </h3>
+          <div className="flex items-center gap-2">
+            <button onClick={loadAllItems}
+              className="px-4 py-2 rounded-xl text-xs font-black transition-colors"
+              style={{ background: 'rgba(99,102,241,0.1)', color: '#a5b4fc', border: '1px solid rgba(99,102,241,0.3)' }}>
+              전체품목 로드
+            </button>
+            <button onClick={addRow}
+              className="px-4 py-2 rounded-xl text-xs font-black transition-colors"
+              style={{ background: 'rgba(255,255,255,0.08)', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.12)' }}>
+              + 1줄 추가
+            </button>
+            <button onClick={handleExcel}
+              className="px-4 py-2 rounded-xl text-xs font-black transition-colors"
+              style={{ background: 'rgba(16,185,129,0.1)', color: '#6ee7b7', border: '1px solid rgba(16,185,129,0.3)' }}>
+              📥 엑셀 다운로드
+            </button>
+          </div>
+          <button onClick={onClose}
+            className="absolute top-5 right-5 p-2 rounded-full transition-colors"
+            style={{ background: 'rgba(255,255,255,0.06)', color: '#64748b' }}>✕</button>
         </div>
 
-        {!selectedClient ? (
-          <p className="text-slate-500 text-sm text-center py-8">보건소를 선택하면 품목 매칭을 설정할 수 있습니다.</p>
-        ) : !editing ? (
-          <div className="overflow-x-auto">
-            <table className="table-base">
-              <thead><tr><th>카테고리</th><th>마스터 품목명</th><th>보건소 품목명</th><th className="text-right">발주단위</th></tr></thead>
+        {/* 테이블 */}
+        <div className="flex-1 overflow-auto p-4" style={{ background: 'rgba(0,0,0,0.2)' }}>
+          <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid rgba(99,102,241,0.15)' }}>
+            <table className="w-full text-[12px] whitespace-nowrap text-center table-fixed">
+              <thead className="sticky top-0 z-10" style={{ background: '#0a0f22' }}>
+                <tr>
+                  <th className="p-3 w-12 font-black" style={{ color: '#64748b', borderBottom: '1px solid rgba(99,102,241,0.2)' }}>순번</th>
+                  <th className="p-3 w-[28%] font-black" style={{ color: '#fbbf24', background: 'rgba(251,191,36,0.05)', borderBottom: '1px solid rgba(99,102,241,0.2)', borderLeft: '1px solid rgba(99,102,241,0.15)', borderRight: '1px solid rgba(99,102,241,0.15)' }}>마스터품목 검색</th>
+                  <th className="p-3 w-[30%] font-black" style={{ color: '#60a5fa', background: 'rgba(96,165,250,0.05)', borderBottom: '1px solid rgba(99,102,241,0.2)', borderRight: '1px solid rgba(99,102,241,0.15)' }}>보건소 전용명칭 (납품서용)</th>
+                  <th className="p-3 w-[8%] font-black" style={{ color: '#94a3b8', borderBottom: '1px solid rgba(99,102,241,0.2)', borderRight: '1px solid rgba(99,102,241,0.15)' }}>단위</th>
+                  <th className="p-3 w-[10%] font-black" style={{ color: '#a5b4fc', borderBottom: '1px solid rgba(99,102,241,0.2)', borderRight: '1px solid rgba(99,102,241,0.15)' }}>발주단위</th>
+                  <th className="p-3 font-black" style={{ color: '#64748b', borderBottom: '1px solid rgba(99,102,241,0.2)' }}>관리</th>
+                </tr>
+              </thead>
               <tbody>
-                {(!mapping?.mappedItems?.length) ? (
-                  <tr><td colSpan={4} className="text-center py-8 text-slate-500">매칭된 품목이 없습니다. 편집을 눌러 설정하세요.</td></tr>
-                ) : mapping.mappedItems.map(m => {
-                  const item = items.find(i => i.id === m.itemId);
+                {rows.map((r, i) => {
+                  const master = masterItems.find(x => x.id === r.itemId);
                   return (
-                    <tr key={m.uid}>
-                      <td><span className="badge bg-slate-700 text-slate-300">{item?.category}</span></td>
-                      <td className="text-slate-400">{item?.name}</td>
-                      <td className="font-black text-white">{m.clientItemName}</td>
-                      <td className="text-right text-indigo-300 font-bold">{m.orderUnit}{item?.unit}</td>
+                    <tr key={r.uid} style={{ borderBottom: '1px solid rgba(99,102,241,0.08)' }}
+                      className="hover:bg-white/[0.02] transition-colors">
+                      <td className="p-2 font-bold" style={{ color: '#475569' }}>{i + 1}</td>
+                      <td className="p-2" style={{ background: 'rgba(251,191,36,0.03)', borderLeft: '1px solid rgba(99,102,241,0.1)', borderRight: '1px solid rgba(99,102,241,0.1)' }}>
+                        <ItemSearchInput
+                          masterItems={masterItems}
+                          initialValue={master?.name || ''}
+                          onSelect={it => updateRow(r.uid, 'itemId', it.id)}
+                        />
+                      </td>
+                      <td className="p-2" style={{ background: 'rgba(96,165,250,0.03)', borderRight: '1px solid rgba(99,102,241,0.1)' }}>
+                        <input
+                          type="text"
+                          value={r.clientItemName || ''}
+                          onChange={e => updateRow(r.uid, 'clientItemName', e.target.value)}
+                          placeholder="납품서에 표시될 이름"
+                          className="w-full px-2 py-1.5 font-black text-[11px] rounded outline-none"
+                          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid transparent', color: '#93c5fd' }}
+                          onFocus={e => e.target.style.borderColor = 'rgba(96,165,250,0.4)'}
+                          onBlur={e => e.target.style.borderColor = 'transparent'}
+                        />
+                      </td>
+                      <td className="p-2 font-bold" style={{ color: '#64748b', borderRight: '1px solid rgba(99,102,241,0.1)' }}>{master?.unit || '-'}</td>
+                      <td className="p-2" style={{ borderRight: '1px solid rgba(99,102,241,0.1)' }}>
+                        <input
+                          type="number"
+                          min="0"
+                          value={r.orderUnit ?? 1}
+                          onChange={e => updateRow(r.uid, 'orderUnit', Number(e.target.value))}
+                          className="w-full px-1 py-1.5 font-black text-center rounded outline-none"
+                          style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid transparent', color: '#a5b4fc' }}
+                          onFocus={e => e.target.style.borderColor = 'rgba(99,102,241,0.4)'}
+                          onBlur={e => e.target.style.borderColor = 'transparent'}
+                        />
+                      </td>
+                      <td className="p-2">
+                        <div className="flex items-center justify-center gap-1">
+                          <button onClick={() => moveRow(i, 'u')} title="위로"
+                            className="w-6 h-6 rounded text-xs font-black transition-colors"
+                            style={{ background: 'rgba(255,255,255,0.05)', color: '#94a3b8' }}>↑</button>
+                          <button onClick={() => moveRow(i, 'd')} title="아래로"
+                            className="w-6 h-6 rounded text-xs font-black transition-colors"
+                            style={{ background: 'rgba(255,255,255,0.05)', color: '#94a3b8' }}>↓</button>
+                          <button onClick={() => copyRow(r, i)} title="복사"
+                            className="w-6 h-6 rounded text-xs font-black transition-colors"
+                            style={{ background: 'rgba(96,165,250,0.1)', color: '#60a5fa' }}>⎘</button>
+                          <button onClick={() => delRow(r.uid)} title="삭제"
+                            className="w-6 h-6 rounded text-xs font-black transition-colors"
+                            style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171' }}>✕</button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
+                {rows.length === 0 && (
+                  <tr><td colSpan={6} className="p-10 text-sm font-bold" style={{ color: '#475569' }}>+ 1줄 추가 버튼으로 품목을 추가하세요</td></tr>
+                )}
               </tbody>
             </table>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <p className="text-xs text-slate-400 mb-2">체크박스로 사용 품목 선택 후 보건소 품목명과 발주단위를 수정하세요.</p>
-            <table className="table-base">
-              <thead><tr><th className="w-12">사용</th><th>카테고리</th><th>마스터 품목명</th><th>보건소 품목명</th><th>발주단위</th></tr></thead>
-              <tbody>
-                {editRows.map((r, i) => (
-                  <tr key={r.uid}>
-                    <td className="text-center">
-                      <input type="checkbox" checked={r.enabled} onChange={e => setEditRows(p => p.map((x,j) => j===i ? {...x,enabled:e.target.checked} : x))} className="w-4 h-4 accent-indigo-500" />
-                    </td>
-                    <td><span className="badge bg-slate-700 text-slate-300 text-xs">{r.category}</span></td>
-                    <td className="text-slate-400 text-sm">{r.itemName}</td>
-                    <td>
-                      <input value={r.clientItemName} disabled={!r.enabled}
-                        onChange={e => setEditRows(p => p.map((x,j) => j===i ? {...x,clientItemName:e.target.value} : x))}
-                        className="input-base text-sm disabled:opacity-40" />
-                    </td>
-                    <td>
-                      <input type="number" min={0.1} step={0.1} value={r.orderUnit} disabled={!r.enabled}
-                        onChange={e => setEditRows(p => p.map((x,j) => j===i ? {...x,orderUnit:e.target.value} : x))}
-                        className="input-base w-24 text-sm disabled:opacity-40" />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        </div>
+
+        {/* 모달 푸터 */}
+        <div className="flex-none px-7 py-4 flex justify-between items-center rounded-b-[2rem]"
+          style={{ borderTop: '1px solid rgba(99,102,241,0.15)', background: '#0a0f22' }}>
+          <span className="text-sm font-bold" style={{ color: '#475569' }}>
+            총 <span className="font-black" style={{ color: '#a5b4fc' }}>{rows.length}</span>개 품목 설정 중
+          </span>
+          <div className="flex gap-3">
+            <button onClick={onClose}
+              className="px-6 py-2.5 rounded-xl text-sm font-black transition-colors"
+              style={{ background: 'rgba(255,255,255,0.06)', color: '#94a3b8' }}>
+              취소 (저장안함)
+            </button>
+            <button onClick={saveAndClose}
+              className="px-8 py-2.5 text-white font-black rounded-xl text-sm transition-opacity hover:opacity-90"
+              style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)', boxShadow: '0 4px 15px rgba(99,102,241,0.4)' }}>
+              ✅ 저장 후 닫기
+            </button>
           </div>
-        )}
+        </div>
       </div>
+    </div>
+  );
+}
+
+// =========================================================================
+// 품목 검색 인풋 (자동완성)
+// =========================================================================
+function ItemSearchInput({ masterItems, initialValue, onSelect }) {
+  const [query, setQuery] = useState(initialValue || '');
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => { setQuery(initialValue || ''); }, [initialValue]);
+
+  const filtered = query.length > 0
+    ? masterItems.filter(it => (it.name || '').includes(query) || (it.category || '').includes(query)).slice(0, 15)
+    : [];
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <input
+        type="text"
+        value={query}
+        onChange={e => { setQuery(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        placeholder="품목명 검색..."
+        className="w-full px-2 py-1.5 font-black text-[11px] rounded outline-none"
+        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid transparent', color: '#e2e8f0' }}
+        onFocusCapture={e => e.target.style.borderColor = 'rgba(251,191,36,0.5)'}
+        onBlurCapture={e => e.target.style.borderColor = 'transparent'}
+      />
+      {open && filtered.length > 0 && (
+        <div className="absolute top-full left-0 right-0 z-[99999] rounded-xl shadow-xl max-h-48 overflow-auto mt-1"
+          style={{ background: '#0d1224', border: '1px solid rgba(251,191,36,0.3)' }}>
+          {filtered.map(it => (
+            <div
+              key={it.id}
+              onMouseDown={() => { onSelect(it); setQuery(it.name); setOpen(false); }}
+              className="px-3 py-2 cursor-pointer text-left text-[11px] font-bold flex justify-between transition-colors hover:bg-white/[0.04]"
+              style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+              <span style={{ color: '#e2e8f0' }}>{it.name}</span>
+              <span className="text-[10px]" style={{ color: '#64748b' }}>{it.category}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

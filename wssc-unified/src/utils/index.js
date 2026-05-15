@@ -144,6 +144,23 @@ export const Utils = {
     }
   },
 
+  dlExcelCustom: (htmlBody, fileName) => {
+    const template = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"><style>
+table{border-collapse:collapse;font-family:'Malgun Gothic',sans-serif;font-size:10pt;width:100%;white-space:nowrap;}
+th,td{border:1px solid #000;padding:6px;vertical-align:middle;}
+th{background-color:#d9e1f2;font-weight:bold;text-align:center;border-bottom:2px solid #000;}
+.num{mso-number-format:"General";text-align:right;}.txt{mso-number-format:"\\@";text-align:center;}
+.l{text-align:left;}.r{color:#dc2626;}.p{color:#7c3aed;font-weight:bold;}
+.hdr{font-size:18pt;background:#4f46e5;color:white;padding:12px;font-weight:900;}
+</style></head><body>${htmlBody}</body></html>`;
+    const blob = new Blob(['﻿' + template], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${fileName}_${Date.now()}.xls`;
+    link.click();
+  },
+
   dlExcel: (html, fn) => {
     const content = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
 <head><meta charset="utf-8"/><style>

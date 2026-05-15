@@ -91,26 +91,64 @@ export default function ClinicBillingPage() {
     showToast(`${status}로 변경됐습니다.`, 'success');
   };
 
+  const generateMonthlyInvoices = () => {
+    showConfirm(`${globalMonth}월 청구서를 발주 데이터 기반으로 일괄 생성하시겠습니까?`, () => {
+      const orders = (st.clientOrders || []).filter(o => (o.month || (o.date||'').slice(0,7)) === globalMonth);
+      if (orders.length === 0) return showToast('해당 월에 발주 내역이 없습니다.', 'warn');
+      const list = st.payments || [];
+      const clientTotals = {};
+      orders.forEach(o => {
+        const pm = (st.priceMappings || []).find(p => p.clientId === o.clientId && p.month === globalMonth);
+        const total = (o.items || []).reduce((s, oi) => {
+          const master = items.find(i => i.id === oi.itemId);
+          const price = pm?.prices?.[oi.itemId] || master?.unitPrice || 0;
+          const qty = (Number(oi.qty1) || 0) + (Number(oi.qty2) || 0);
+          return s + qty * price;
+        }, 0);
+        clientTotals[o.clientId] = (clientTotals[o.clientId] || 0) + total;
+      });
+      const newEntries = Object.entries(clientTotals)
+        .filter(([, amt]) => amt > 0)
+        .filter(([cId]) => !list.find(x => x.clientId === cId && (x.date||'').startsWith(globalMonth)))
+        .map(([cId, amt]) => {
+          const client = clients.find(c => c.id === cId);
+          return {
+            id: `INV-${globalMonth.replace('-','')}-${Utils.genId().slice(-4)}`,
+            clientId: cId, clientName: client?.name || cId,
+            amount: amt, date: `${globalMonth}-01`,
+            dueDate: `${globalMonth}-25`, status: '입금대기',
+            createdAt: new Date().toISOString(),
+          };
+        });
+      if (newEntries.length === 0) return showToast('이미 모든 보건소 청구서가 등록되어 있습니다.', 'info');
+      updateSt('payments', [...list, ...newEntries]);
+      showToast(`${newEntries.length}건 청구서가 일괄 생성되었습니다.`, 'success');
+    });
+  };
+
+  const handleExcelDownload = () => {
+    if (filtered.length === 0) return showToast('다운로드할 데이터가 없습니다.', 'warn');
+    let html = `<table><thead><tr><th>청구번호</th><th>보건소</th><th>공급가액</th><th>부가세</th><th>청구합계</th><th>납기일</th><th>상태</th></tr></thead><tbody>`;
+    filtered.forEach(inv => {
+      const vat = Math.floor((inv.amount || 0) * 0.1);
+      const total = (inv.amount || 0) + vat;
+      html += `<tr><td class="l">${inv.id}</td><td class="l">${inv.clientName}</td><td class="num">${(inv.amount||0).toLocaleString()}</td><td class="num">${vat.toLocaleString()}</td><td class="num p">${total.toLocaleString()}</td><td>${inv.dueDate||''}</td><td>${inv.status||'입금대기'}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    Utils.dlExcelCustom(html, `보건소청구_${globalMonth}`);
+  };
+
   const printAll = () => {
-    const rows = filtered.map(i => `
-      <tr>
-        <td>${i.invoiceNo || i.id}</td>
-        <td>${i.clientName}</td>
-        <td>${(i.amount||0).toLocaleString()}원</td>
-        <td>${Math.floor((i.amount||0)*0.1).toLocaleString()}원</td>
-        <td>${((i.amount||0)+Math.floor((i.amount||0)*0.1)).toLocaleString()}원</td>
-        <td>${i.dueDate || ''}</td>
-        <td>${i.status || '입금대기'}</td>
-      </tr>`).join('');
-    Utils.printHtml(`
-      <h2 style="margin-bottom:16px">보건소 청구 목록 — ${globalMonth}</h2>
-      <table border="1" cellpadding="6" style="border-collapse:collapse;width:100%;font-size:13px">
-        <thead style="background:#f0f0f0">
-          <tr><th>청구번호</th><th>보건소</th><th>공급가액</th><th>부가세</th><th>합계</th><th>납기일</th><th>상태</th></tr>
-        </thead>
+    const rows = filtered.map(i => {
+      const vat = Math.floor((i.amount||0)*0.1);
+      return `<tr><td>${i.id}</td><td>${i.clientName}</td><td>${(i.amount||0).toLocaleString()}원</td><td>${vat.toLocaleString()}원</td><td>${((i.amount||0)+vat).toLocaleString()}원</td><td>${i.dueDate||''}</td><td>${i.status||'입금대기'}</td></tr>`;
+    }).join('');
+    Utils.printContent(`보건소 청구 목록 — ${globalMonth}`,
+      `<table border="1" cellpadding="6" style="border-collapse:collapse;width:100%;font-size:12px">
+        <thead style="background:#f0f0f0"><tr><th>청구번호</th><th>보건소</th><th>공급가액</th><th>부가세</th><th>합계</th><th>납기일</th><th>상태</th></tr></thead>
         <tbody>${rows}</tbody>
-      </table>
-    `);
+      </table>`
+    );
   };
 
   const card = (label, val, color) => (
@@ -144,9 +182,17 @@ export default function ClinicBillingPage() {
           ))}
         </div>
         <div className="flex-1" />
+        <button onClick={handleExcelDownload} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold"
+          style={{ background: 'rgba(16,185,129,0.1)', color: '#6ee7b7', border: '1px solid rgba(16,185,129,0.25)' }}>
+          {Ic.Down} 엑셀
+        </button>
         <button onClick={printAll} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold"
           style={{ background: 'rgba(15,23,42,0.6)', color: '#94a3b8', border: '1px solid rgba(51,65,85,0.3)' }}>
           {Ic.Print2} 인쇄
+        </button>
+        <button onClick={generateMonthlyInvoices} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold"
+          style={{ background: 'rgba(245,158,11,0.12)', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.3)' }}>
+          ⚡ 일괄발행
         </button>
         <button onClick={openAdd} className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold"
           style={{ background: 'rgba(99,102,241,0.2)', color: '#a5b4fc', border: '1px solid rgba(99,102,241,0.35)' }}>
@@ -194,7 +240,7 @@ export default function ClinicBillingPage() {
                       <button onClick={() => openEdit(inv)} className="px-2 py-1 rounded-md text-xs font-bold"
                         style={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8' }}>{Ic.Edit}</button>
                       <button onClick={() => del(inv)} className="px-2 py-1 rounded-md text-xs font-bold"
-                        style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171' }}>{Ic.Del}</button>
+                        style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171' }}>{Ic.Trash}</button>
                     </div>
                   </td>
                 </tr>
