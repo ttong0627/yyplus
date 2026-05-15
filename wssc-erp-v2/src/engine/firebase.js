@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, setDoc, onSnapshot } from 'firebase/firestore';
 
 export const localFirebaseConfig = {
   apiKey: "AIzaSyDfgyTteXS9p-ksXVAgX0J34K1ExPAWUPk",
@@ -22,7 +22,7 @@ try {
   if (fc?.apiKey && fc.apiKey !== "여기에_apiKey를_입력하세요") { 
       app = !getApps().length ? initializeApp(fc) : getApp(); 
       auth = getAuth(app); 
-      db = getFirestore(app); 
+      db = initializeFirestore(app, { localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()}) }); 
   }
 } catch(e) { 
     firebaseInitError = e.message; 

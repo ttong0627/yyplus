@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, setDoc, onSnapshot } from 'firebase/firestore';
 
 export const windowErrors = [];
 window.firebasePermissionDenied = false;
@@ -19,7 +19,7 @@ const localFirebaseConfig = {
 let app = null, auth = null, db = null, firebaseInitError = null;
 try {
   const fc = typeof __firebase_config === 'undefined' ? localFirebaseConfig : JSON.parse(__firebase_config);
-  if (fc?.apiKey && fc.apiKey !== "여기에_apiKey를_입력하세요") { app = !getApps().length ? initializeApp(fc) : getApp(); auth = getAuth(app); db = getFirestore(app); }
+  if (fc?.apiKey && fc.apiKey !== "여기에_apiKey를_입력하세요") { app = !getApps().length ? initializeApp(fc) : getApp(); auth = getAuth(app); db = initializeFirestore(app, { localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()}) }); }
 } catch(e) { firebaseInitError = e.message; windowErrors.push(`[FB Error] ${e.message}`); }
 
 export { app, auth, db, firebaseInitError };

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, setDoc, onSnapshot, collection } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, setDoc, onSnapshot, collection } from 'firebase/firestore';
 
 const Ico = ({ size=24, className='', d, children }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} shrink-0="true">{d ? <path d={d}/> : children}</svg>;
 const Ic = {
@@ -40,7 +40,7 @@ const IS_CANVAS = typeof __firebase_config !== 'undefined';
 let app = null, auth = null, db = null;
 try {
   const fc = IS_CANVAS ? JSON.parse(__firebase_config) : { apiKey: "AIzaSyDfgyTteXS9p-ksXVAgX0J34K1ExPAWUPk", authDomain: "wssc-nutrition.firebaseapp.com", projectId: "wssc-nutrition", storageBucket: "wssc-nutrition.firebasestorage.app", messagingSenderId: "845373489879", appId: "1:845373489879:web:acf85d5395f0739d0b2692" };
-  if (fc && fc.apiKey && fc.apiKey !== "여기에_apiKey를_입력하세요") { app = !getApps().length ? initializeApp(fc) : getApp(); auth = getAuth(app); db = getFirestore(app); }
+  if (fc && fc.apiKey && fc.apiKey !== "여기에_apiKey를_입력하세요") { app = !getApps().length ? initializeApp(fc) : getApp(); auth = getAuth(app); db = initializeFirestore(app, { localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()}) }); }
 } catch(e) { console.error(e); }
 
 const appId = typeof __app_id !== 'undefined' ? String(__app_id).replace(/\//g, '_') : 'wssc-production';
