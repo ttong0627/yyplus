@@ -17,42 +17,40 @@ import WorkOrder from './pages/WorkOrder';
 
 const menuData = [
   {
-    title: "대시보드",
+    title: "기준 정보",
     items: [
-      { name: "대시보드 홈", path: "/", icon: <LayoutDashboard size={20} /> },
-    ]
-  },
-  {
-    title: "기초데이터",
-    items: [
-      { name: "사용자 관리", path: "/basic/users", icon: <Users size={20} /> },
-      { name: "품목 관리", path: "/basic/items", icon: <Box size={20} /> },
-      { name: "거래처 관리", path: "/basic/partners", icon: <Database size={20} /> },
-      { name: "보건소 관리", path: "/basic/clinic", icon: <MapPin size={20} /> },
+      { name: "사용자", path: "/basic/users", icon: <Users size={20} /> },
+      { name: "품목 (마스터)", path: "/basic/items", icon: <Box size={20} /> },
+      { name: "거래처", path: "/basic/partners", icon: <Database size={20} /> },
+      { name: "보건소", path: "/basic/clinic", icon: <MapPin size={20} /> },
     ]
   },
   {
     title: "발주 관리",
     items: [
-      { name: "스마트 발주입력", path: "/order/register", icon: <ShoppingCart size={20} /> },
-      { name: "AI 발주집계", path: "/order/ai-summary", icon: <Factory size={20} /> },
+      { name: "발주서 입력", path: "/order/register", icon: <ShoppingCart size={20} /> },
+      { name: "발주 현황 (집계)", path: "/order/ai-summary", icon: <Factory size={20} /> },
     ]
   },
   {
-    title: "작업 및 배송",
+    title: "물류 및 배송",
     items: [
-      { name: "작업 일정/달력", path: "/task/schedule", icon: <Calendar size={20} /> },
       { name: "소분작업지시서", path: "/task/subdivide", icon: <LayoutDashboard size={20} /> },
-      { name: "실시간 배송관제", path: "/logistics/tracking", icon: <MapPin size={20} /> },
       { name: "상차지시서", path: "/logistics/loading", icon: <Box size={20} /> },
-      { name: "모바일 수령증", path: "/logistics/receipt", icon: <CheckCircle2 size={20} /> },
+      { name: "배송관제 (실시간)", path: "/logistics/tracking", icon: <Truck size={20} /> },
+      { name: "수령 확인증", path: "/logistics/receipt", icon: <CheckCircle2 size={20} /> },
+    ]
+  },
+  {
+    title: "대금 정산",
+    items: [
+      { name: "매출 명세서", path: "/billing", icon: <Receipt size={20} /> },
     ]
   },
   {
     title: "시스템",
     items: [
-      { name: "대금정산", path: "/billing", icon: <FileText size={20} /> },
-      { name: "마이그레이션 도구", path: "/system/check", icon: <CheckCircle2 size={20} /> },
+      { name: "데이터 마이그레이션", path: "/system/check", icon: <Settings size={20} /> },
     ]
   }
 ];
