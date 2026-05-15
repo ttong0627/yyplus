@@ -80,6 +80,72 @@ async function runTmsMigration(db) {
   return { clients: clients.length, items: items.length, suppliers: suppliers.length, clientOrders: clientOrders.length, users: mergedUsers.length };
 }
 
+// wssc-erp-v2(단일 doc) + wssc-work-order(wssc_state 컬렉션) → wssc_unified 통합 마이그레이션
+const WO_APP_IDS = ['wssc-production', 'default-app-id', '1:845373489879:web:acf85d5395f0739d0b2692'];
+
+async function runLegacyMigration(db) {
+  // 1) wssc-erp-v2: 단일 doc (main_state)
+  let erpData = null;
+  for (const pathParts of LEGACY_PATHS) {
+    try {
+      const snap = await getDoc(doc(db, ...pathParts));
+      if (snap.exists()) {
+        const d = snap.data();
+        if (d && (Array.isArray(d.users) || Array.isArray(d.clients))) { erpData = d; break; }
+      }
+    } catch { /* 권한 없음 */ }
+  }
+
+  // 2) wssc-work-order: wssc_state 컬렉션
+  let woData = null;
+  for (const appId of WO_APP_IDS) {
+    try {
+      const cs = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'wssc_state'));
+      if (!cs.empty) {
+        woData = {};
+        cs.forEach(d => { woData[d.id] = d.data().data; });
+        break;
+      }
+    } catch { /* 없음 */ }
+  }
+
+  if (!erpData && !woData) throw new Error('기존 DB를 찾을 수 없습니다. Firestore 권한 또는 데이터가 없습니다.');
+
+  // 3) 병합: ERP 우선, 워크오더로 packageOrders·workSchedules 보완
+  const merged = {};
+  if (erpData) {
+    Object.keys(INITIAL_STATE).forEach(k => { if (erpData[k] !== undefined) merged[k] = erpData[k]; });
+  }
+  if (woData) {
+    ['packageOrders', 'workSchedules'].forEach(k => { if (woData[k]) merged[k] = woData[k]; });
+    Object.keys(woData).forEach(k => {
+      if (Object.keys(INITIAL_STATE).includes(k) && (!merged[k] || (Array.isArray(merged[k]) && merged[k].length === 0)))
+        merged[k] = woData[k];
+    });
+  }
+
+  // 4) admin 사용자 보장
+  const users = Array.isArray(merged.users) ? [...merged.users] : [];
+  if (!users.find(u => u.id === 'admin')) users.push(DEFAULT_ADMIN);
+  merged.users = users;
+
+  // 5) wssc_unified에 저장
+  await Promise.all(
+    Object.keys(merged).map(k => setDoc(doc(db, COLL, k), { data: JSON.parse(JSON.stringify(merged[k])) }))
+  );
+
+  return {
+    clients: (merged.clients || []).length,
+    items: (merged.items || []).length,
+    suppliers: (merged.suppliers || []).length,
+    clientOrders: (merged.clientOrders || []).length,
+    mappings: (merged.mappings || []).length,
+    packageOrders: (merged.packageOrders || []).length,
+    priceMappings: (merged.priceMappings || []).length,
+    users: users.length,
+  };
+}
+
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
@@ -205,6 +271,12 @@ export function AppProvider({ children }) {
     return await runTmsMigration(db);
   }, [fbUser]);
 
+  // 기존 wssc-erp-v2 + wssc-work-order 전체 데이터 가져오기
+  const migrateLegacyData = useCallback(async () => {
+    if (!db || !fbUser) throw new Error('DB 미연결');
+    return await runLegacyMigration(db);
+  }, [fbUser]);
+
   const login = useCallback((user, keepLogin) => {
     setCUser(user);
     if (keepLogin) localStorage.setItem('wssc_u_session', JSON.stringify(user));
@@ -232,6 +304,7 @@ export function AppProvider({ children }) {
       globalMonth, setGlobalMonth,
       addLog,
       migrateTmsData,
+      migrateLegacyData,
     }}>
       {children}
     </AppContext.Provider>

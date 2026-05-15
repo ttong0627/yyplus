@@ -4,10 +4,12 @@ import { Utils } from '../../utils';
 import { Ic } from '../../components/common/Icons';
 
 export default function SystemPage() {
-  const { st, updateSt, showToast, showConfirm, dbReady, fbUser, migrateTmsData } = useApp();
+  const { st, updateSt, showToast, showConfirm, dbReady, fbUser, migrateTmsData, migrateLegacyData } = useApp();
   const [importing, setImporting] = useState(false);
   const [migrating, setMigrating] = useState(false);
   const [migrateResult, setMigrateResult] = useState(null);
+  const [legacyMigrating, setLegacyMigrating] = useState(false);
+  const [legacyResult, setLegacyResult] = useState(null);
 
   const exportData = () => {
     const blob = new Blob([JSON.stringify(st, null, 2)], { type: 'application/json' });
@@ -51,6 +53,25 @@ export default function SystemPage() {
           showToast('가져오기 실패: ' + e.message, 'error');
         } finally {
           setMigrating(false);
+        }
+      }
+    );
+  };
+
+  const handleLegacyMigrate = () => {
+    showConfirm(
+      '기존 ERP(wssc-erp-v2) + 워크오더(wssc-work-order) DB에서\n전체 데이터를 가져옵니다.\n\n보건소, 품목, 거래처, 발주, 단가, 매핑, 패키지 등 모든 데이터.\n현재 데이터가 덮어씌워집니다. 계속하시겠습니까?',
+      async () => {
+        setLegacyMigrating(true);
+        setLegacyResult(null);
+        try {
+          const result = await migrateLegacyData();
+          setLegacyResult(result);
+          showToast(`가져오기 완료! 보건소 ${result.clients}개, 품목 ${result.items}개, 발주 ${result.clientOrders}개`, 'success');
+        } catch (e) {
+          showToast('가져오기 실패: ' + e.message, 'error');
+        } finally {
+          setLegacyMigrating(false);
         }
       }
     );
@@ -104,12 +125,39 @@ export default function SystemPage() {
         </div>
       </div>
 
-      {/* ★ TMS 데이터 가져오기 */}
+      {/* ★ 기존 ERP/워크오더 데이터 가져오기 (최우선) */}
+      <div className="card border-indigo-700/50 bg-indigo-900/10">
+        <h2 className="section-title text-indigo-400">기존 프로그램 DB 전체 가져오기 ★권장</h2>
+        <p className="text-xs text-slate-400 mb-4">
+          wssc-erp-v2(기존 ERP)와 wssc-work-order(워크오더) DB의 전체 데이터를 통합 시스템으로 가져옵니다.<br/>
+          보건소·품목·거래처·발주·단가매핑·패키지·정산·구매요청 등 모든 데이터가 이전됩니다.
+        </p>
+        <div className="flex items-center gap-4 flex-wrap">
+          <button
+            onClick={handleLegacyMigrate}
+            disabled={legacyMigrating || !dbReady}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm transition-all disabled:opacity-50"
+            style={{ background: legacyMigrating ? 'rgba(99,102,241,0.1)' : 'rgba(99,102,241,0.2)', color: '#a5b4fc', border: '1px solid rgba(99,102,241,0.4)' }}>
+            {legacyMigrating ? '⏳ 가져오는 중...' : '⚡ 기존 ERP/워크오더 전체 가져오기'}
+          </button>
+          {legacyResult && (
+            <div className="text-xs font-bold rounded-lg px-4 py-2"
+              style={{ background: 'rgba(16,185,129,0.1)', color: '#34d399', border: '1px solid rgba(16,185,129,0.25)' }}>
+              ✅ 완료 — 보건소 {legacyResult.clients}개 · 품목 {legacyResult.items}개 ·
+              거래처 {legacyResult.suppliers}개 · 발주 {legacyResult.clientOrders}개 ·
+              단가매핑 {legacyResult.priceMappings}개 · 패키지 {legacyResult.packageOrders}개 ·
+              사용자 {legacyResult.users}명
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* TMS 데이터 가져오기 */}
       <div className="card border-amber-700/50 bg-amber-900/10">
-        <h2 className="section-title text-amber-400">기존 DB 데이터 가져오기</h2>
+        <h2 className="section-title text-amber-400">TMS(wellshare-tms) DB 데이터 가져오기</h2>
         <p className="text-xs text-slate-400 mb-4">
           wellshare-tms Firebase의 기존 데이터(보건소·품목·거래처·발주·정산·매핑 등 전체)를<br/>
-          통합 시스템 DB로 가져옵니다. 데이터가 없거나 비어있을 때 실행하세요.
+          통합 시스템 DB로 가져옵니다. TMS 별도 프로젝트 데이터가 필요할 때 실행하세요.
         </p>
         <div className="flex items-center gap-4 flex-wrap">
           <button
@@ -117,7 +165,7 @@ export default function SystemPage() {
             disabled={migrating || !dbReady}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm transition-all disabled:opacity-50"
             style={{ background: migrating ? 'rgba(245,158,11,0.1)' : 'rgba(245,158,11,0.2)', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.4)' }}>
-            {migrating ? '⏳ 가져오는 중...' : '⚡ 기존 DB 전체 가져오기'}
+            {migrating ? '⏳ 가져오는 중...' : '⚡ TMS DB 가져오기'}
           </button>
           {migrateResult && (
             <div className="text-xs font-bold rounded-lg px-4 py-2"
