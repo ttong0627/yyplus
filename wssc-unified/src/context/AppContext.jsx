@@ -37,6 +37,7 @@ const INITIAL_STATE = {
   deliveryBlocks: [],
   deliveryTrips: [],
   deliveryRecords: [],
+  milkOrders: [],
 };
 
 // tms-unified 플랫 컬렉션 → wssc_unified 변환 & 저장

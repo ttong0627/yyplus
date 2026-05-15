@@ -32,6 +32,7 @@ const MENUS = [
     id: 'package', label: '패키지 관리', icon: 'Box', roles: ['admin','office','logistics'],
     children: [
       { id:'pkgCal',    label:'작업 일정',    icon:'Cal',    path:'/package/calendar',  roles:['admin','office','logistics'] },
+      { id:'milkPkg',  label:'분유패키지',  icon:'Box',    path:'/package/milk',      roles:['admin','office','logistics'] },
       { id:'workOrder', label:'소분 지시서', icon:'ListP',  path:'/erp/work-order',    roles:['admin','office'] },
       { id:'pkgReg',    label:'패키지 구성', icon:'Edit',   path:'/package/register',  roles:['admin','office'] },
       { id:'pkgMat',  label:'소분작업내역', icon:'ListO',  path:'/package/matrix',   roles:['admin','office','logistics'] },

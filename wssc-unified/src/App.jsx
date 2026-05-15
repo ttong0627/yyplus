@@ -32,6 +32,7 @@ import PkgRegisterPage from './pages/package/PkgRegisterPage';
 import PkgMatrixPage from './pages/package/PkgMatrixPage';
 import PkgPickingPage from './pages/package/PkgPickingPage';
 import PkgPrintPage from './pages/package/PkgPrintPage';
+import MilkPackagePage from './pages/package/MilkPackagePage';
 
 // 배송
 import DeliveryBlocksPage from './pages/delivery/DeliveryBlocksPage';
@@ -91,6 +92,7 @@ function AppInner() {
           <Route path="/package/matrix"   element={<ProtectedRoute roles={['admin','office','logistics']}><PkgMatrixPage /></ProtectedRoute>} />
           <Route path="/package/picking"  element={<ProtectedRoute roles={['admin','office','logistics']}><PkgPickingPage /></ProtectedRoute>} />
           <Route path="/package/print"    element={<ProtectedRoute roles={['admin','office','logistics']}><PkgPrintPage /></ProtectedRoute>} />
+          <Route path="/package/milk"    element={<ProtectedRoute roles={['admin','office','logistics']}><MilkPackagePage /></ProtectedRoute>} />
 
           {/* 배송 */}
           <Route path="/delivery/blocks"  element={<ProtectedRoute roles={['admin','logistics']}><DeliveryBlocksPage /></ProtectedRoute>} />
