@@ -97,6 +97,18 @@ export function OrderRegister() {
 
   const selectedClientName = clients.find(c => c.id === selectedClient)?.name || '보건소';
 
+  const handleExcelDownload = () => {
+    if (!selectedClient) return alert('보건소를 먼저 선택해주세요.');
+    let html = `<table><thead><tr><th>No.</th><th>품목명(보건소 등록명칭)</th><th>발주량(Box/EA)</th></tr></thead><tbody>`;
+    gridData.forEach((row, idx) => {
+      if(row.itemName.trim()) {
+        html += `<tr><td>${idx + 1}</td><td class="l">${row.itemName}</td><td class="num p">${row.reqBoxes || 0}</td></tr>`;
+      }
+    });
+    html += `</tbody></table>`;
+    Utils.dlExcelCustom(html, `발주입력폼_${selectedClientName}_${targetDate}`);
+  };
+
   return (
     <div className="w-full h-full bg-[#f8f9fc] p-6 lg:p-10 animate-fade-in flex flex-col font-['Pretendard','Inter',sans-serif]">
       {/* Removed Header to maximize workspace */}
@@ -108,6 +120,9 @@ export function OrderRegister() {
               <h3 className="text-2xl font-black text-[#44337a]">[{targetDate}] {selectedClientName} 발주 엑셀입력폼</h3>
           </div>
           <div className="flex gap-4 w-full md:w-auto">
+              <button onClick={handleExcelDownload} className="flex items-center gap-2 px-5 py-3 bg-white border border-[#e2e8f0] text-gray-700 font-bold rounded-[14px] shadow-sm hover:bg-gray-50 transition-colors">
+                <Download size={18}/> 엑셀 다운로드
+              </button>
               <input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} className="px-4 py-3 bg-white border border-[#e2e8f0] rounded-[14px] font-bold text-gray-700 shadow-sm focus:border-[#805ad5] outline-none w-full md:w-44 text-center" />
               <select value={selectedClient} onChange={e => setSelectedClient(e.target.value)} className="px-4 py-3 bg-white border border-[#e2e8f0] rounded-[14px] font-bold text-gray-700 shadow-sm focus:border-[#805ad5] outline-none w-full md:w-60">
                 <option value="">보건소를 선택하세요</option>
@@ -160,6 +175,9 @@ export function OrderRegister() {
               <AlertTriangle size={20}/> 첫 번째 입력 칸에 엑셀 데이터를 붙여넣기(Ctrl+V) 하세요.
           </div>
           <div className="flex gap-3">
+              <button onClick={handleExcelDownload} className="px-8 py-4 bg-white border border-[#e2e8f0] text-gray-700 font-bold rounded-[16px] text-lg hover:bg-gray-50 transition-colors shadow-sm flex items-center gap-2">
+                <Download size={20}/> 서식 다운로드
+              </button>
               <button onClick={() => setGridData([...gridData, { itemName: '', reqBoxes: '', fbId: null }])} className="px-8 py-4 bg-[#edf2f7] text-[#4a5568] font-black rounded-[16px] text-lg hover:bg-[#e2e8f0] transition-colors">
                 + 행 추가
               </button>

@@ -190,12 +190,24 @@ function LoadingOrder() {
     if (loadingData.length === 0) return alert('인쇄할 상차 데이터가 없습니다.');
     let html = `<table><thead><tr><th>품목명</th><th>총 상차 수량 (Box)</th><th>상세 분류</th></tr></thead><tbody>`;
     loadingData.forEach(d => {
-      html += `<tr><td class="font-bold">\${d.itemName}</td><td class="highlight bg-gray-100">\${d.total}</td><td class="text-xs">`;
-      d.details.forEach(det => { html += `[\${det.clientName}: \${det.reqBoxes}박스] `; });
+      html += `<tr><td class="font-bold">${d.itemName}</td><td class="highlight bg-gray-100">${d.total}</td><td class="text-xs">`;
+      d.details.forEach(det => { html += `[${det.clientName}: ${det.reqBoxes}박스] `; });
       html += `</td></tr>`;
     });
     html += `</tbody></table>`;
-    Utils.printContent(`[\${targetDate}] 전체 상차 지시서`, html);
+    Utils.printContent(`[${targetDate}] 전체 상차 지시서`, html);
+  };
+
+  const handleExcelDownload = () => {
+    if (loadingData.length === 0) return alert('다운로드할 데이터가 없습니다.');
+    let html = `<table><thead><tr><th>품목명</th><th>총 상차 수량 (Box)</th><th>상세 분류</th></tr></thead><tbody>`;
+    loadingData.forEach(d => {
+      html += `<tr><td class="l">${d.itemName}</td><td class="num p">${d.total}</td><td class="l">`;
+      d.details.forEach(det => { html += `[${det.clientName}: ${det.reqBoxes}박스] `; });
+      html += `</td></tr>`;
+    });
+    html += `</tbody></table>`;
+    Utils.dlExcelCustom(html, `상차지시서_${targetDate}`);
   };
 
   return (
@@ -207,6 +219,7 @@ function LoadingOrder() {
         </div>
         <div className="flex gap-2">
            <input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} className="px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold shadow-sm outline-none" />
+           <button onClick={handleExcelDownload} className="flex items-center gap-2 px-5 py-2 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl text-sm hover:bg-slate-50 transition-all"><Download size={16}/> 엑셀 다운로드</button>
            <button onClick={handlePrint} className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white font-black rounded-xl text-sm hover:bg-blue-700 transition-all"><Printer size={16}/> 지시서 인쇄</button>
         </div>
       </div>

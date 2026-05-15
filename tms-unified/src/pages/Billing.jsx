@@ -81,6 +81,16 @@ export default function Billing() {
   const paidAmount = invoices.filter(i => i.status === '완료').reduce((acc, cur) => acc + (Number(cur.amount) || 0), 0);
   const unpaidAmount = invoices.filter(i => i.status !== '완료').reduce((acc, cur) => acc + (Number(cur.amount) || 0), 0);
 
+  const handleExcelDownload = () => {
+    if (invoices.length === 0) return alert('다운로드할 데이터가 없습니다.');
+    let html = `<table><thead><tr><th>청구 번호</th><th>고객사(보건소)</th><th>청구 금액</th><th>발행기준월</th><th>입금 상태</th></tr></thead><tbody>`;
+    invoices.forEach(inv => {
+      html += `<tr><td class="l">${inv.invoiceNo}</td><td class="l">${inv.clientName}</td><td class="num p">${inv.amount}</td><td class="c">${inv.date.substring(0,7)}</td><td class="c">${inv.status}</td></tr>`;
+    });
+    html += `</tbody></table>`;
+    import('../Utils').then(m => m.Utils.dlExcelCustom(html, `월별정산내역_${targetMonth}`));
+  };
+
   return (
     <div className="w-full h-full animate-fade-in flex flex-col p-4 sm:p-6 bg-[#f8f9fc]">
       {/* 1-Depth Flattening - 배너 제거, 곧바로 유틸리티 툴바 */}
@@ -89,9 +99,14 @@ export default function Billing() {
           type="month" value={targetMonth} onChange={e => setTargetMonth(e.target.value)}
           className="px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold outline-none focus:border-indigo-500"
         />
-        <button onClick={generateMonthlyInvoices} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-black shadow-md shadow-indigo-200 transition-all flex items-center gap-2 text-sm">
-          <Receipt size={18} /> 실데이터 기반 계산서 일괄발행
-        </button>
+        <div className="flex gap-2">
+          <button onClick={handleExcelDownload} className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-5 py-2.5 rounded-xl font-black shadow-sm transition-all flex items-center gap-2 text-sm">
+            <Download size={18} /> 정산내역 엑셀 다운로드
+          </button>
+          <button onClick={generateMonthlyInvoices} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-black shadow-md shadow-indigo-200 transition-all flex items-center gap-2 text-sm">
+            <Receipt size={18} /> 실데이터 기반 계산서 일괄발행
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
