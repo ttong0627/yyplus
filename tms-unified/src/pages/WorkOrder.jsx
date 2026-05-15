@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Routes, Route, Navigate } from 'react-router-dom';
-import { collection, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Wrench, Grid, Calendar, Printer, Package, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Utils } from '../Utils';
@@ -165,15 +165,17 @@ function WorkSchedule() {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   
   useEffect(() => {
-    // 해당 월의 발주 내역을 모두 가져와서 일자별로 집계
+    // 해당 월의 발주 내역을 모두 가져와서 일자별로 집계 (Where 필터로 해당 월만 조회)
     const targetMonthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
-    const unsub = onSnapshot(collection(db, 'clientOrders'), snap => {
+    const startStr = `${targetMonthStr}-01`;
+    const endStr = `${targetMonthStr}-31`;
+    const q = query(collection(db, 'clientOrders'), where('date', '>=', startStr), where('date', '<=', endStr));
+
+    const unsub = onSnapshot(q, snap => {
        const counts = {};
        snap.docs.forEach(doc => {
          const data = doc.data();
-         if (data.date && data.date.startsWith(targetMonthStr)) {
-           counts[data.date] = (counts[data.date] || 0) + 1;
-         }
+         counts[data.date] = (counts[data.date] || 0) + 1;
        });
        setOrderDates(counts);
     });

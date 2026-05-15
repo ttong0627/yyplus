@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Routes, Route, Navigate } from 'react-router-dom';
-import { collection, onSnapshot, query, addDoc, updateDoc, doc, serverTimestamp, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, addDoc, updateDoc, doc, serverTimestamp, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Truck, MapPin, Clock, Search, Navigation, CheckCircle2, Box, FileText, UserCircle, Printer } from 'lucide-react';
 import { Utils } from '../Utils';
@@ -35,12 +35,12 @@ function DeliveryTracking() {
   const [loading, setLoading] = useState(true);
   const [targetDate, setTargetDate] = useState(new Date().toISOString().split('T')[0]);
 
-  // Firestore 연동
+  // Firestore 연동 (Where 필터 적용)
   useEffect(() => {
     setLoading(true);
-    const unsub = onSnapshot(collection(db, 'deliveries'), (snap) => {
+    const q = query(collection(db, 'deliveries'), where('date', '==', targetDate));
+    const unsub = onSnapshot(q, (snap) => {
       let data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      data = data.filter(d => (d.date || targetDate) === targetDate);
       setDeliveries(data);
       setLoading(false);
     });
@@ -162,7 +162,8 @@ function LoadingOrder() {
   const fetchLoadingData = async () => {
     setLoading(true);
     try {
-      const snapOrders = await getDocs(collection(db, 'clientOrders'));
+      const qOrders = query(collection(db, 'clientOrders'), where('date', '==', targetDate));
+      const snapOrders = await getDocs(qOrders);
       const snapClients = await getDocs(collection(db, 'clients'));
       const clientsMap = {};
       snapClients.docs.forEach(d => { clientsMap[d.id] = d.data().name; });
@@ -170,12 +171,10 @@ function LoadingOrder() {
       const itemsMap = {};
       snapOrders.docs.forEach(d => {
         const o = d.data();
-        if (o.date === targetDate) {
-          const iName = o.itemName.trim();
-          if (!itemsMap[iName]) itemsMap[iName] = { itemName: iName, total: 0, details: [] };
-          itemsMap[iName].total += Number(o.reqBoxes) || 0;
-          itemsMap[iName].details.push({ clientName: clientsMap[o.clientId] || '기타', reqBoxes: Number(o.reqBoxes) || 0 });
-        }
+        const iName = o.itemName.trim();
+        if (!itemsMap[iName]) itemsMap[iName] = { itemName: iName, total: 0, details: [] };
+        itemsMap[iName].total += Number(o.reqBoxes) || 0;
+        itemsMap[iName].details.push({ clientName: clientsMap[o.clientId] || '기타', reqBoxes: Number(o.reqBoxes) || 0 });
       });
       setLoadingData(Object.values(itemsMap).sort((a,b) => a.itemName.localeCompare(b.itemName)));
     } catch(e) {
@@ -249,7 +248,8 @@ function DeliveryReceipt() {
   
   useEffect(() => {
     const fetchReceipts = async () => {
-      const snapOrders = await getDocs(collection(db, 'clientOrders'));
+      const qOrders = query(collection(db, 'clientOrders'), where('date', '==', targetDate));
+      const snapOrders = await getDocs(qOrders);
       const snapClients = await getDocs(collection(db, 'clients'));
       const clientsMap = {};
       snapClients.docs.forEach(d => { clientsMap[d.id] = d.data().name; });
@@ -257,10 +257,8 @@ function DeliveryReceipt() {
       const clientGroups = {};
       snapOrders.docs.forEach(d => {
         const o = d.data();
-        if (o.date === targetDate) {
-          if (!clientGroups[o.clientId]) clientGroups[o.clientId] = { clientId: o.clientId, clientName: clientsMap[o.clientId] || '기타', items: [] };
-          clientGroups[o.clientId].items.push({ itemName: o.itemName, reqBoxes: o.reqBoxes });
-        }
+        if (!clientGroups[o.clientId]) clientGroups[o.clientId] = { clientId: o.clientId, clientName: clientsMap[o.clientId] || '기타', items: [] };
+        clientGroups[o.clientId].items.push({ itemName: o.itemName, reqBoxes: o.reqBoxes });
       });
       setReceiptData(Object.values(clientGroups));
     };

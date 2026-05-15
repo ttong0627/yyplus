@@ -4,7 +4,7 @@ import {
   Menu, X, Search, Bell, Settings, LogOut, LayoutDashboard, Database, 
   Users, MapPin, Box, ShoppingCart, Truck, Calendar, FileText, ChevronDown, CheckCircle2, Factory, Wrench, Activity
 } from 'lucide-react';
-import { collection, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, getDocs, getCountFromServer, query, where } from 'firebase/firestore';
 import { db } from './firebase';
 
 import Login from './pages/Login';
@@ -218,22 +218,21 @@ function DashboardHome() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
+        const today = new Date().toISOString().split('T')[0];
+        
+        // 🚀 DB 전체 긁어오기(통조회) 방지 -> 서버단에서 개수(Count)만 집계 & 필요한 날짜만 쿼리(Where)
         const [oSnap, iSnap, cSnap, invSnap] = await Promise.all([
-          getDocs(collection(db, 'clientOrders')),
-          getDocs(collection(db, 'items')),
-          getDocs(collection(db, 'clients')),
-          getDocs(collection(db, 'invoices'))
+          getCountFromServer(query(collection(db, 'clientOrders'), where('date', '==', today))),
+          getCountFromServer(collection(db, 'items')),
+          getCountFromServer(collection(db, 'clients')),
+          getCountFromServer(collection(db, 'invoices'))
         ]);
         
-        // 오늘 날짜 기준 당일 발주 건수
-        const today = new Date().toISOString().split('T')[0];
-        const todayOrders = oSnap.docs.filter(d => d.data().date === today).length;
-
         setStats({
-          orders: todayOrders,
-          items: iSnap.size,
-          clinics: cSnap.size,
-          invoices: invSnap.size
+          orders: oSnap.data().count,
+          items: iSnap.data().count,
+          clinics: cSnap.data().count,
+          invoices: invSnap.data().count
         });
       } catch (error) {
         console.error("Dashboard fetch error:", error);
@@ -257,7 +256,7 @@ function DashboardHome() {
           <div>
             <h1 className="text-4xl font-black text-[#2d3748] tracking-tight">시스템 실시간 현황</h1>
             <p className="text-lg font-bold text-[#718096] mt-2">
-              모든 하드코딩 데이터를 제거하고 100% DB 연동으로 개편되었습니다.
+              최적화된 DB 쿼리 적용 완료 (서버단 Count 집계 및 Where 필터링 적용)
             </p>
           </div>
        </div>

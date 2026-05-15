@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Receipt, Download, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
-import { collection, onSnapshot, query, orderBy, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, getDocs, addDoc, serverTimestamp, where } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export default function Billing() {
@@ -11,14 +11,17 @@ export default function Billing() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
 
-  // DB 연동: 실제 invoices 컬렉션 구독
+  // DB 연동: 실제 invoices 컬렉션 구독 (Where 필터 적용)
   useEffect(() => {
     setLoading(true);
-    const unsub = onSnapshot(collection(db, 'invoices'), (snap) => {
+    const q = query(
+      collection(db, 'invoices'),
+      where('date', '>=', targetMonth + '-01'),
+      where('date', '<=', targetMonth + '-31')
+    );
+    const unsub = onSnapshot(q, (snap) => {
       const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      // targetMonth로 필터링 (date 기준)
-      const filtered = data.filter(d => d.date && d.date.startsWith(targetMonth));
-      setInvoices(filtered.sort((a, b) => b.createdAt - a.createdAt));
+      setInvoices(data.sort((a, b) => b.createdAt - a.createdAt));
       setLoading(false);
     });
     return () => unsub();
@@ -28,7 +31,12 @@ export default function Billing() {
   const generateMonthlyInvoices = async () => {
     if (!window.confirm(`${targetMonth}월 청구서를 일괄 발행하시겠습니까?`)) return;
     try {
-      const snapOrders = await getDocs(collection(db, 'clientOrders'));
+      const qOrders = query(
+        collection(db, 'clientOrders'),
+        where('date', '>=', targetMonth + '-01'),
+        where('date', '<=', targetMonth + '-31')
+      );
+      const snapOrders = await getDocs(qOrders);
       const snapItems = await getDocs(collection(db, 'items'));
       const snapClients = await getDocs(collection(db, 'clients'));
       
