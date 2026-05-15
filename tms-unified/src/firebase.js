@@ -2,13 +2,16 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 
+// ✅ [통합 메인 DB] wellshare-tms (ttong0627@gmail.com)
+// 절대 변경하지 말 것 (프로젝트 헌법 제9조 적용)
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDfgyTteXS9p-ksXVAgX0J34K1ExPAWUPk",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "wssc-nutrition.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "wssc-nutrition",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "wssc-nutrition.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "845373489879",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:845373489879:web:acf85d5395f0739d0b2692"
+  apiKey: "AIzaSyDL4zeVF9SnmIhMeT4fYLRUK6qX7mlIkyA",
+  authDomain: "wellshare-tms.firebaseapp.com",
+  projectId: "wellshare-tms",
+  storageBucket: "wellshare-tms.firebasestorage.app",
+  messagingSenderId: "942130472468",
+  appId: "1:942130472468:web:44336a27ea99e3242c6901",
+  measurementId: "G-DDRBEVZDRB"
 };
 
 let app, auth, db;

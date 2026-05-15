@@ -1,154 +1,189 @@
 import React, { useState } from 'react';
 import { initializeApp, getApps, deleteApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, writeBatch, doc } from 'firebase/firestore';
-import { db as currentDb } from '../firebase'; // 현재 연결된 새 DB
+import { getFirestore, collection, getDocs, writeBatch, doc, getDoc } from 'firebase/firestore';
+import { db as newDb } from '../firebase'; // 통합 메인 DB (wellshare-tms)
+
+// ========================================================
+// 레거시 DB 설정 목록 (데이터 퍼올 원본 프로젝트들)
+// ========================================================
+const LEGACY_CONFIGS = [
+  {
+    label: 'wssc-nutrition (구 ERP)',
+    appName: 'legacy-wssc-nutrition',
+    config: {
+      apiKey: "AIzaSyDfgyTteXS9p-ksXVAgX0J34K1ExPAWUPk",
+      authDomain: "wssc-nutrition.firebaseapp.com",
+      projectId: "wssc-nutrition",
+      storageBucket: "wssc-nutrition.firebasestorage.app",
+      messagingSenderId: "845373489879",
+      appId: "1:845373489879:web:acf85d5395f0739d0b2692"
+    }
+  }
+  // 형님이 다른 프로젝트 추가 원하실 때 여기 추가
+];
+
+// 마이그레이션 대상 컬렉션 (구버전 DB에서 새 DB로 그대로 이식)
+const COLLECTIONS_TO_MIGRATE = [
+  { from: 'items',        to: 'items',        label: '품목 (마스터)' },
+  { from: 'clients',     to: 'clients',      label: '보건소' },
+  { from: 'suppliers',   to: 'partners',     label: '거래처/공급업체' },
+  { from: 'users',       to: 'users',        label: '사용자' },
+  { from: 'clientOrders',to: 'orders',       label: '발주 내역' },
+  { from: 'invoices',    to: 'billing',      label: '청구/정산' },
+];
 
 export default function SystemAdmin() {
-  const [legacyConfig, setLegacyConfig] = useState({
-    // 형님의 기존 103개 데이터가 살아숨쉬는 오리지널 Firebase 세팅
-    apiKey: "AIzaSyDfgyTteXS9p-ksXVAgX0J34K1ExPAWUPk",
-    authDomain: "wssc-nutrition.firebaseapp.com",
-    projectId: "wssc-nutrition",
-  });
-  
-  const [status, setStatus] = useState('idle'); // idle, connecting, fetching, writing, done, error
+  const [status, setStatus] = useState('idle');
   const [logs, setLogs] = useState([]);
   const [progress, setProgress] = useState(0);
+  const [summary, setSummary] = useState(null);
 
-  const addLog = (msg) => setLogs((prev) => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev]);
+  const addLog = (msg, type = 'info') => {
+    const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : type === 'warn' ? '⚠️' : '•';
+    setLogs(prev => [`[${new Date().toLocaleTimeString()}] ${prefix} ${msg}`, ...prev]);
+  };
 
-  const runMigration = async () => {
-    if (!window.confirm("진짜 오리지널 레거시 DB에서 품목 103개 등 모든 데이터를 새 시스템으로 복원하시겠습니까? (이전 테스트 데이터는 무시하고 새 ID로 강제 복원합니다)")) return;
-    
-    setStatus('connecting');
+  const runMigration = async (legacyCfg) => {
+    if (!window.confirm(`[${legacyCfg.label}] 의 데이터를 새 통합 DB(wellshare-tms)로 복사하시겠습니까?\n기존에 같은 ID의 데이터가 있으면 덮어씁니다.`)) return;
+
+    setStatus('running');
     setProgress(0);
     setLogs([]);
-    addLog('구버전 오리지널 데이터베이스(103개 품목 저장소) 연결 시도 중...');
+    setSummary(null);
+    addLog(`====== [${legacyCfg.label}] 마이그레이션 시작 ======`);
+
+    let legacyApp = null;
+    const migrSummary = {};
 
     try {
-      // 1. 구버전 DB 임시 연결 (기존 연결이 있으면 삭제)
-      const existingApp = getApps().find(a => a.name === 'legacy-migration-app');
+      // 1단계: 구버전 DB 임시 연결
+      const existingApp = getApps().find(a => a.name === legacyCfg.appName);
       if (existingApp) await deleteApp(existingApp);
-
-      const legacyApp = initializeApp(legacyConfig, 'legacy-migration-app');
+      legacyApp = initializeApp(legacyCfg.config, legacyCfg.appName);
       const legacyDb = getFirestore(legacyApp);
-      addLog('오리지널 DB 연결 완료. 103개 품목 구출 작전 시작...');
-      setProgress(20);
+      addLog(`구 DB [${legacyCfg.label}] 연결 성공`);
+      setProgress(10);
 
-      // 2. 컬렉션 데이터 추출
-      const collectionsToMigrate = ['clients', 'items', 'suppliers', 'users', 'clientOrders', 'invoices'];
-      const batch = writeBatch(currentDb);
-      let totalDocs = 0;
+      // 2단계: 컬렉션별 데이터 추출 및 신규 DB에 기록
+      for (let i = 0; i < COLLECTIONS_TO_MIGRATE.length; i++) {
+        const { from, to, label } = COLLECTIONS_TO_MIGRATE[i];
+        addLog(`[${label}] 원본 데이터 읽는 중... (${from} → ${to})`);
 
-      for (let i = 0; i < collectionsToMigrate.length; i++) {
-        const colName = collectionsToMigrate[i];
-        addLog(`[${colName}] 컬렉션 원본 데이터 싹쓸이 스캔 중...`);
-        
         try {
-          const snapshot = await getDocs(collection(legacyDb, colName));
-          
-          if (snapshot.empty) {
-            addLog(`[${colName}] 데이터가 없습니다 (스킵)`);
+          const snap = await getDocs(collection(legacyDb, from));
+          if (snap.empty) {
+            addLog(`[${label}] 원본 없음 - 건너뜀`, 'warn');
+            migrSummary[label] = 0;
             continue;
           }
 
-          snapshot.forEach((document) => {
-            // 새 DB에 동일한 ID로 세팅 준비
-            const newDocRef = doc(currentDb, colName, document.id);
-            batch.set(newDocRef, document.data());
-            totalDocs++;
-          });
-          
-          addLog(`[${colName}] ${snapshot.size}개 문서 복구 완료 (마이그레이션 적재)`);
+          // 500개 단위로 배치 나눠서 쓰기 (Firestore 제한)
+          const docs = snap.docs;
+          let written = 0;
+          for (let bStart = 0; bStart < docs.length; bStart += 499) {
+            const batch = writeBatch(newDb);
+            const chunk = docs.slice(bStart, bStart + 499);
+            chunk.forEach(d => {
+              const ref = doc(newDb, to, d.id);
+              batch.set(ref, d.data(), { merge: true }); // merge: 기존 데이터 보존하면서 업데이트
+            });
+            await batch.commit();
+            written += chunk.length;
+          }
+
+          addLog(`[${label}] ${written}개 ✅ (${from} → ${to})`, 'success');
+          migrSummary[label] = written;
         } catch (colErr) {
-           addLog(`⚠️ [${colName}] 스캔 실패 (권한 없음). 스킵.`);
+          addLog(`[${label}] 읽기 실패: ${colErr.message}`, 'error');
+          migrSummary[label] = '오류';
         }
-        
-        setProgress(20 + Math.floor(((i + 1) / collectionsToMigrate.length) * 60));
+
+        setProgress(10 + Math.floor(((i + 1) / COLLECTIONS_TO_MIGRATE.length) * 85));
       }
 
-      // 3. 일괄 기록 (Batch Commit)
-      if (totalDocs > 0) {
-        addLog(`총 ${totalDocs}개의 오리지널 데이터를 현재 시스템에 쏟아붓습니다...`);
-        await batch.commit();
-        addLog(`✅ 복원 완료! 형님의 원래 데이터 103개가 모두 새 DB에 안전하게 안착했습니다.`);
-      } else {
-        addLog(`복사할 원본 데이터가 없습니다. 이미 모두 옮겨졌거나 구버전 DB가 비어있습니다.`);
-      }
-
+      // 완료
       setProgress(100);
       setStatus('done');
-      addLog('🎉 전체 마이그레이션(구출 작전) 완료. 새로고침 시 데이터가 나타납니다.');
+      setSummary(migrSummary);
+      addLog(`====== 마이그레이션 완료! 아래 결과를 확인하세요 ======`, 'success');
 
-    } catch (error) {
-      console.error(error);
+    } catch (err) {
+      addLog(`치명적 오류: ${err.message}`, 'error');
       setStatus('error');
-      addLog(`❌ 치명적 에러 발생: ${error.message}`);
+    } finally {
+      if (legacyApp) {
+        try { await deleteApp(legacyApp); } catch(_) {}
+      }
     }
   };
 
   return (
-    <div className="w-full h-full p-4 sm:p-6 animate-fade-in flex flex-col">
-      <div className="flex items-center gap-4 mb-6">
-        <div className="w-12 h-12 bg-emerald-100 rounded-2xl flex items-center justify-center border border-emerald-200">
-          <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-          </svg>
-        </div>
-        <div>
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight">오리지널 데이터 구출 시스템 (복구)</h1>
-          <p className="text-slate-500 font-bold mt-1">예전에 쓰시던 품목 103개 등 원본 데이터를 모두 가져옵니다.</p>
-        </div>
-      </div>
+    <div className="w-full h-full flex flex-col p-6 bg-[#f8f9fc] gap-6 overflow-auto">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <h2 className="text-xl font-black text-slate-800 mb-1">DB연동 / 시스템점검</h2>
+        <p className="text-sm text-slate-500 font-bold mb-6">
+          현재 통합 DB: <span className="text-indigo-600">wellshare-tms</span> (ttong0627@gmail.com)
+        </p>
 
-      <div className="w-full bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8">
-        
-        <div className="bg-red-50 p-6 rounded-2xl border border-red-100 mb-8">
-          <h3 className="text-lg font-black text-red-800 mb-2">원상 복구 마이그레이션</h3>
-          <p className="text-red-700 font-bold mb-4">
-            형님이 기존에 등록해두셨던 <b>진짜 품목 데이터 103개</b>와 보건소 정보를 그대로 가져옵니다.<br/>
-            제가 멍청하게 지워버렸던 진짜 마이그레이션 기능을 되살렸습니다. 아래 버튼을 눌러주십시오.
-          </p>
-          <button 
-            onClick={runMigration}
-            disabled={status === 'connecting' || status === 'writing'}
-            className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-black rounded-xl transition-all shadow-md disabled:opacity-50"
-          >
-            {status === 'connecting' ? '연결 중...' : status === 'writing' ? '기록 중...' : '원래 데이터 103개 강제 복원 (마이그레이션)'}
-          </button>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+          <p className="text-sm font-black text-amber-700">⚠️ 마이그레이션이란?</p>
+          <p className="text-sm text-amber-600 mt-1">기존 구버전 DB(wssc-nutrition)에 들어있던 형님의 실 데이터(103개 품목, 보건소 등)를 새 통합 DB(wellshare-tms)로 복사해옵니다. 기존에 같은 데이터가 있으면 최신 내용으로 업데이트(merge)합니다.</p>
         </div>
 
+        {/* 마이그레이션 버튼 - 원본 DB별로 */}
+        <div className="space-y-3">
+          {LEGACY_CONFIGS.map(cfg => (
+            <button
+              key={cfg.appName}
+              onClick={() => runMigration(cfg)}
+              disabled={status === 'running'}
+              className="w-full py-4 px-6 bg-gradient-to-r from-[#7c3aed] to-[#db2777] text-white font-black rounded-xl text-base hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-md"
+            >
+              {status === 'running' ? '마이그레이션 진행 중...' : `🚀 [${cfg.label}] 데이터 통합 DB로 복사`}
+            </button>
+          ))}
+        </div>
+
+        {/* 진행률 바 */}
         {status !== 'idle' && (
-          <div className="mt-8">
-            <div className="flex justify-between text-sm font-bold text-slate-600 mb-2">
-              <span>작업 진행률</span>
-              <span>{progress}%</span>
+          <div className="mt-4">
+            <div className="flex justify-between text-xs font-bold text-slate-500 mb-1">
+              <span>진행률</span><span>{progress}%</span>
             </div>
-            <div className="w-full bg-slate-100 rounded-full h-4 mb-6 overflow-hidden">
-              <div 
-                className={`h-4 rounded-full transition-all duration-500 ${status === 'error' ? 'bg-red-500' : 'bg-emerald-500'}`} 
+            <div className="w-full bg-slate-100 rounded-full h-3">
+              <div
+                className="bg-gradient-to-r from-[#7c3aed] to-[#db2777] h-3 rounded-full transition-all duration-500"
                 style={{ width: `${progress}%` }}
-              ></div>
-            </div>
-
-            <div className="bg-slate-900 rounded-2xl p-6 font-mono text-sm text-green-400 h-[300px] overflow-y-auto shadow-inner">
-              <div className="flex items-center gap-2 mb-4 text-slate-400 border-b border-slate-700 pb-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M4 17h16a2 2 0 002-2V5a2 2 0 00-2-2H4a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                터미널 로그
-              </div>
-              {logs.map((log, idx) => (
-                <div key={idx} className={`mb-1 ${log.includes('에러') || log.includes('⚠️') ? 'text-yellow-400' : ''} ${log.includes('✅') || log.includes('🎉') ? 'text-blue-300 font-bold' : ''}`}>
-                  {log}
-                </div>
-              ))}
-              {(status === 'connecting' || status === 'fetching' || status === 'writing') && (
-                <div className="animate-pulse mt-2 text-slate-500">_</div>
-              )}
+              />
             </div>
           </div>
         )}
-
       </div>
+
+      {/* 결과 요약 카드 */}
+      {summary && (
+        <div className="bg-white rounded-2xl shadow-sm border border-emerald-200 p-6">
+          <h3 className="font-black text-emerald-700 text-lg mb-4">✅ 마이그레이션 결과 요약</h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {Object.entries(summary).map(([label, count]) => (
+              <div key={label} className={`p-4 rounded-xl text-center ${count === '오류' ? 'bg-red-50 border border-red-200' : 'bg-emerald-50 border border-emerald-200'}`}>
+                <p className="text-xs font-black text-slate-500 mb-1">{label}</p>
+                <p className={`text-2xl font-black ${count === '오류' ? 'text-red-600' : 'text-emerald-600'}`}>{count === '오류' ? '⚠️' : count}</p>
+                {count !== '오류' && <p className="text-xs text-slate-400">개 복사됨</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 로그 패널 */}
+      {logs.length > 0 && (
+        <div className="bg-slate-900 rounded-2xl p-5 flex flex-col gap-1 max-h-80 overflow-auto">
+          {logs.map((log, i) => (
+            <p key={i} className={`text-xs font-mono ${log.includes('❌') ? 'text-red-400' : log.includes('✅') ? 'text-emerald-400' : log.includes('⚠️') ? 'text-amber-400' : 'text-slate-400'}`}>{log}</p>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
