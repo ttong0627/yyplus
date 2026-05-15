@@ -1,169 +1,175 @@
 import React, { useState } from 'react';
-import { initializeApp, getApps, deleteApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, writeBatch, doc } from 'firebase/firestore';
-import { db as currentDb } from '../firebase'; // 현재 연결된 새 DB
+import { collection, writeBatch, doc } from 'firebase/firestore';
+import { db } from '../firebase'; 
+import { CheckCircle2, AlertCircle, Database, PlusCircle, Activity } from 'lucide-react';
 
 export default function SystemAdmin() {
-  const [legacyConfig, setLegacyConfig] = useState({
-    apiKey: "AIzaSyDfgyTteXS9p-ksXVAgX0J34K1ExPAWUPk",
-    authDomain: "wssc-nutrition.firebaseapp.com",
-    projectId: "wssc-nutrition",
-  });
-  
-  const [status, setStatus] = useState('idle'); // idle, connecting, fetching, writing, done, error
+  const [status, setStatus] = useState('idle'); // idle, seeding, done, error
   const [logs, setLogs] = useState([]);
   const [progress, setProgress] = useState(0);
 
   const addLog = (msg) => setLogs((prev) => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev]);
 
-  const runMigration = async () => {
-    if (!window.confirm("정말로 데이터 마이그레이션을 실행하시겠습니까? (이 작업은 새 DB에 데이터를 덮어씁니다)")) return;
+  const runSeeding = async () => {
+    if (!window.confirm("DB에 기초 테스트 데이터를 밀어 넣으시겠습니까?\n(기존 데이터는 유지되며, 샘플 데이터가 추가됩니다)")) return;
     
-    setStatus('connecting');
+    setStatus('seeding');
     setProgress(0);
     setLogs([]);
-    addLog('구버전 데이터베이스 연결 시도 중...');
+    addLog('🚀 1-Click DB Seeding 시작...');
 
     try {
-      // 1. 구버전 DB 임시 연결 (기존 연결이 있으면 삭제)
-      const existingApp = getApps().find(a => a.name === 'legacy-migration-app');
-      if (existingApp) await deleteApp(existingApp);
-      
-      const legacyApp = initializeApp({
-        apiKey: legacyConfig.apiKey,
-        authDomain: legacyConfig.authDomain,
-        projectId: legacyConfig.projectId,
-      }, 'legacy-migration-app');
-      
-      const legacyDb = getFirestore(legacyApp);
-      addLog('✅ 구버전 데이터베이스 연결 성공');
-      
-      setStatus('fetching');
-      setProgress(10);
-      
-      // 2. 이관 대상 컬렉션 목록 (단일 파일(App.jsx)에 선언되어 있던 데이터 구조 기반)
-      const collectionsToMigrate = ['clients', 'items', 'clientOrders', 'purchaseRequests', 'suppliers', 'mappings'];
-      const migrationData = {};
-      
-      for (let i = 0; i < collectionsToMigrate.length; i++) {
-        const colName = collectionsToMigrate[i];
-        addLog(`📦 [${colName}] 컬렉션 데이터 추출 중...`);
-        
-        const snapshot = await getDocs(collection(legacyDb, colName));
-        migrationData[colName] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
-        addLog(`✅ [${colName}] ${snapshot.docs.length}건 추출 완료`);
-        setProgress(10 + Math.floor(((i + 1) / collectionsToMigrate.length) * 40)); // 10% ~ 50%
-      }
+      const batch = writeBatch(db);
+      let opCount = 0;
+      const today = new Date().toISOString().split('T')[0];
 
-      setStatus('writing');
-      addLog('🚀 새 데이터베이스로 일괄 이관(Batch Write) 준비 중...');
-      
-      // 3. 새 DB에 일괄 저장 (Batch Write - Firestore의 최대 한도는 500개이므로 나눠서 처리)
-      const CHUNK_SIZE = 400;
-      let totalDocs = 0;
-      let processedDocs = 0;
-      
-      // 총 문서 개수 계산
-      Object.keys(migrationData).forEach(key => totalDocs += migrationData[key].length);
-      
-      if (totalDocs === 0) {
-        addLog('⚠️ 이전할 데이터가 없습니다.');
-        setStatus('done');
-        return;
-      }
+      // 1. 샘플 보건소 (Clients) 세팅
+      addLog('1. 보건소(Clients) 데이터 생성 중...');
+      const sampleClients = [
+        { id: 'cli_seoul_01', name: '종로구 보건소', type: 'clinic', zone: '강북' },
+        { id: 'cli_seoul_02', name: '강남구 보건소', type: 'clinic', zone: '강남' },
+        { id: 'cli_gyeong_01', name: '분당구 보건소', type: 'clinic', zone: '경기남부' },
+        { id: 'cli_incheon_01', name: '연수구 보건소', type: 'clinic', zone: '인천' }
+      ];
+      sampleClients.forEach(c => {
+        batch.set(doc(collection(db, 'clients'), c.id), c);
+        opCount++;
+      });
+      setProgress(20);
 
-      for (const colName of Object.keys(migrationData)) {
-        const docs = migrationData[colName];
+      // 2. 샘플 품목 (Items) 세팅
+      addLog('2. 취급 품목(Items) 데이터 생성 중...');
+      const sampleItems = [
+        { id: 'item_milk_01', name: '서울우유 1L', category: '유제품', price: 2500, unit: '팩' },
+        { id: 'item_rice_01', name: '유기농 쌀 10kg', category: '농산물', price: 35000, unit: '포' },
+        { id: 'item_veg_01', name: '신선 야채 혼합팩', category: '농산물', price: 12000, unit: '박스' },
+        { id: 'item_egg_01', name: '무항생제 계란 30구', category: '축산물', price: 8500, unit: '판' }
+      ];
+      sampleItems.forEach(i => {
+        batch.set(doc(collection(db, 'items'), i.id), i);
+        opCount++;
+      });
+      setProgress(40);
+
+      // 3. 당일 샘플 발주 (ClientOrders) 세팅
+      addLog(`3. 당일(${today}) 발주 데이터(ClientOrders) 50건 무작위 생성 중...`);
+      for (let i = 0; i < 50; i++) {
+        const rClient = sampleClients[Math.floor(Math.random() * sampleClients.length)];
+        const rItem = sampleItems[Math.floor(Math.random() * sampleItems.length)];
+        const qty = Math.floor(Math.random() * 20) + 1; // 1~20 박스
         
-        // Chunk 단위로 쪼개어 Batch 쓰기
-        for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
-          const chunk = docs.slice(i, i + CHUNK_SIZE);
-          const batch = writeBatch(currentDb);
-          
-          chunk.forEach(docData => {
-            const docRef = doc(currentDb, colName, docData.id);
-            // Firestore에는 id 필드를 넣지 않는 것이 좋으므로 뺄 수도 있지만, 기존 구조 유지를 위해 그대로 복사
-            batch.set(docRef, docData);
-          });
-          
-          await batch.commit();
-          processedDocs += chunk.length;
-          addLog(`💾 [${colName}] ${chunk.length}건 저장 완료... (${processedDocs}/${totalDocs})`);
-          setProgress(50 + Math.floor((processedDocs / totalDocs) * 50)); // 50% ~ 100%
-        }
+        const orderRef = doc(collection(db, 'clientOrders'));
+        batch.set(orderRef, {
+          clientId: rClient.id,
+          itemName: rItem.name,
+          reqBoxes: qty,
+          date: today,
+          status: '배송준비중',
+          createdAt: Date.now()
+        });
+        opCount++;
       }
-      
-      addLog(`🎉 모든 마이그레이션이 완료되었습니다! (총 ${totalDocs}건 이관 완료)`);
-      setStatus('done');
+      setProgress(60);
+
+      // 4. 당일 배송/배차 (Deliveries) 세팅
+      addLog(`4. 당일(${today}) 배송 관제 데이터(Deliveries) 생성 중...`);
+      const sampleDrivers = ['김기사(11가1234)', '이택배(22나5678)', '박물류(33다9012)'];
+      sampleDrivers.forEach((driver, idx) => {
+        const delRef = doc(collection(db, 'deliveries'));
+        batch.set(delRef, {
+          driverName: driver.split('(')[0],
+          vehicleNo: driver.split('(')[1].replace(')', ''),
+          status: idx === 0 ? '배송중' : '상차대기',
+          date: today,
+          temperature: (Math.random() * 2 + 2).toFixed(1) + '℃',
+          createdAt: Date.now()
+        });
+        opCount++;
+      });
+      setProgress(80);
+
+      // 5. 이전 달 계산서 (Invoices) 샘플
+      addLog(`5. 이전 달 샘플 청구서(Invoices) 생성 중...`);
+      const invRef = doc(collection(db, 'invoices'));
+      batch.set(invRef, {
+        date: '2026-04-30',
+        title: '2026년 04월 종로구 보건소 정산 청구',
+        totalAmount: 1450000,
+        status: '발급완료',
+        createdAt: Date.now()
+      });
+      opCount++;
+
+      // 일괄 커밋 실행
+      addLog(`[Commit] 총 \${opCount}개의 문서를 DB에 일괄 기록합니다...`);
+      await batch.commit();
+
       setProgress(100);
-
+      setStatus('done');
+      addLog('✅ 모든 테스트 데이터가 성공적으로 DB에 주입되었습니다!');
+      
     } catch (error) {
       console.error(error);
-      addLog(`❌ 마이그레이션 실패: ${error.message}`);
       setStatus('error');
+      addLog(`❌ 에러 발생: \${error.message}`);
     }
   };
 
   return (
-    <div className="w-full h-full p-6 animate-fade-in flex flex-col items-center">
-      <div className="w-full max-w-4xl bg-white/70 backdrop-blur-md p-8 rounded-[2rem] shadow-xl border border-white flex flex-col items-center">
-        <h2 className="text-3xl font-black text-slate-800 mb-2">데이터 베이스 일괄 이관 도구</h2>
-        <p className="text-sm text-slate-500 font-bold mb-8 text-center max-w-lg">
-          구 시스템(`wssc-nutrition`)의 모든 데이터를 클릭 한 번으로 무손실 추출하여 새로운 통합 플랫폼의 데이터베이스로 안전하게 복사(Migration)합니다.
-        </p>
+    <div className="w-full h-full p-4 sm:p-6 animate-fade-in flex flex-col">
+      <div className="flex items-center gap-4 mb-6">
+        <Database className="text-[#805ad5]" size={32} />
+        <div>
+          <h1 className="text-3xl font-black text-slate-800 tracking-tight">마이그레이션 & 초기 세팅 도구</h1>
+          <p className="text-slate-500 font-bold mt-1">Firestore DB가 비어있을 때 버튼 하나로 실무 테스트용 데이터를 채워 넣습니다.</p>
+        </div>
+      </div>
 
-        {/* 설정 카드 */}
-        <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200">
-            <h3 className="text-sm font-black text-slate-600 mb-4 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-rose-500"></span> Source (구버전 DB)
-            </h3>
-            <div className="space-y-3">
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 pl-1">Project ID</label>
-                <input type="text" value={legacyConfig.projectId} onChange={e=>setLegacyConfig({...legacyConfig, projectId: e.target.value})} className="w-full mt-1 p-3 bg-white border border-slate-200 rounded-xl text-xs font-black outline-none focus:border-indigo-400" />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 pl-1">API Key</label>
-                <input type="text" value={legacyConfig.apiKey} onChange={e=>setLegacyConfig({...legacyConfig, apiKey: e.target.value})} className="w-full mt-1 p-3 bg-white border border-slate-200 rounded-xl text-xs font-black outline-none focus:border-indigo-400" />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-indigo-50/50 p-6 rounded-3xl border border-indigo-100 flex flex-col justify-center items-center text-center">
-             <h3 className="text-sm font-black text-indigo-800 mb-2 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-indigo-500"></span> Target (신규 DB)
-            </h3>
-            <p className="text-xs text-indigo-600 font-bold mb-4">현재 .env 환경변수로 연결된 데이터베이스</p>
-            <div className="bg-white px-4 py-2 rounded-xl shadow-sm border border-indigo-100 text-xs font-black text-slate-700">
-               {import.meta.env.VITE_FIREBASE_PROJECT_ID || "wssc-nutrition (현재 동일)"}
-            </div>
+      <div className="w-full bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8">
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-100 mb-8 flex items-start gap-4">
+          <Activity className="text-blue-500 mt-1" size={24}/>
+          <div>
+            <h3 className="text-lg font-black text-blue-900 mb-2">초기 데이터 자동 주입 (DB Seeding)</h3>
+            <p className="text-blue-700 font-bold mb-4">
+              현재 연결된 Firebase 프로젝트에 보건소, 품목, <b>당일 발주 50건</b>, <b>배차 내역</b>, <b>과거 청구서</b> 등을 자동 생성합니다. 
+              텅 빈 화면을 채우고 실제 시스템이 어떻게 동작하는지 테스트할 수 있습니다.
+            </p>
+            <button 
+              onClick={runSeeding}
+              disabled={status === 'seeding'}
+              className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-xl transition-all shadow-md disabled:opacity-50"
+            >
+              <PlusCircle size={20} />
+              {status === 'seeding' ? '데이터 쏟아붓는 중...' : '테스트 데이터 통으로 밀어넣기'}
+            </button>
           </div>
         </div>
 
-        {/* 액션 버튼 */}
-        <button 
-          onClick={runMigration}
-          disabled={status === 'connecting' || status === 'fetching' || status === 'writing'}
-          className="w-full md:w-auto px-12 py-5 bg-indigo-600 text-white rounded-2xl font-black text-lg shadow-lg shadow-indigo-200 hover:bg-indigo-700 hover:shadow-indigo-300 hover:-translate-y-1 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
-        >
-          {status === 'idle' || status === 'error' ? '🚀 마이그레이션 강제 실행' : status === 'done' ? '✅ 이관 완료 (다시 실행)' : '데이터 이관 중...'}
-        </button>
-
-        {/* 진행 상태 및 로그 */}
         {status !== 'idle' && (
-          <div className="w-full mt-8 flex flex-col gap-4 animate-slide-up">
-            <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
-               <div className="h-full bg-indigo-500 transition-all duration-300 ease-out" style={{ width: `${progress}%` }}></div>
+          <div className="mt-8">
+            <div className="flex justify-between text-sm font-bold text-slate-600 mb-2">
+              <span>작업 진행률</span>
+              <span>{progress}%</span>
             </div>
-            <div className="bg-slate-900 rounded-2xl p-4 h-48 overflow-y-auto font-mono text-[11px] text-slate-300 flex flex-col gap-1 shadow-inner">
-               {logs.map((log, idx) => (
-                 <div key={idx} className={`${log.includes('❌') ? 'text-rose-400' : log.includes('✅') ? 'text-emerald-400' : log.includes('🎉') ? 'text-yellow-300 font-bold' : ''}`}>
-                   {log}
-                 </div>
-               ))}
-               {logs.length === 0 && <div className="text-slate-600">대기 중...</div>}
+            <div className="w-full bg-slate-100 rounded-full h-4 mb-6 overflow-hidden">
+              <div 
+                className={`h-4 rounded-full transition-all duration-500 \${status === 'error' ? 'bg-red-500' : 'bg-gradient-to-r from-[#d53f8c] to-[#805ad5]'}`} 
+                style={{ width: `\${progress}%` }}
+              ></div>
+            </div>
+
+            <div className="bg-slate-900 rounded-2xl p-6 font-mono text-sm text-green-400 h-[300px] overflow-y-auto shadow-inner">
+              <div className="flex items-center gap-2 mb-4 text-slate-400 border-b border-slate-700 pb-2">
+                <CheckCircle2 size={16} /> 터미널 로그
+              </div>
+              {logs.map((log, idx) => (
+                <div key={idx} className={`mb-1 \${log.includes('에러') ? 'text-red-400' : ''} \${log.includes('완료') ? 'text-blue-300 font-bold' : ''}`}>
+                  {log}
+                </div>
+              ))}
+              {status === 'seeding' && (
+                <div className="animate-pulse mt-2 text-slate-500">_</div>
+              )}
             </div>
           </div>
         )}
