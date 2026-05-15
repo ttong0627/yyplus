@@ -17,40 +17,55 @@ import WorkOrder from './pages/WorkOrder';
 
 const menuData = [
   {
-    title: "기준 정보",
+    title: "기초자료관리",
     items: [
-      { name: "사용자", path: "/basic/users", icon: <Users size={20} /> },
-      { name: "품목 (마스터)", path: "/basic/items", icon: <Box size={20} /> },
-      { name: "거래처", path: "/basic/partners", icon: <Database size={20} /> },
-      { name: "보건소", path: "/basic/clinic", icon: <MapPin size={20} /> },
+      { name: "보건소단가설정", path: "/basic/clinic-price", icon: <Database size={20} /> },
+      { name: "보건소 관리", path: "/basic/clinic", icon: <MapPin size={20} /> },
+      { name: "사용자 관리", path: "/basic/users", icon: <Users size={20} /> },
+      { name: "품목 관리", path: "/basic/items", icon: <Box size={20} /> },
+      { name: "거래처 관리", path: "/basic/partners", icon: <Database size={20} /> },
     ]
   },
   {
-    title: "발주 관리",
+    title: "발주관리",
     items: [
-      { name: "발주서 입력", path: "/order/register", icon: <ShoppingCart size={20} /> },
-      { name: "발주 현황 (집계)", path: "/order/ai-summary", icon: <Factory size={20} /> },
+      { name: "품목매칭", path: "/order/matching", icon: <CheckCircle2 size={20} /> },
+      { name: "발주등록", path: "/order/register", icon: <ShoppingCart size={20} /> },
+      { name: "구매요청", path: "/order/request", icon: <ShoppingCart size={20} /> },
+      { name: "입고확인", path: "/order/receive", icon: <CheckCircle2 size={20} /> },
+      { name: "AI집계(참고)", path: "/order/ai-summary", icon: <Factory size={20} /> },
     ]
   },
   {
-    title: "물류 및 배송",
+    title: "작업관리",
     items: [
-      { name: "소분작업지시서", path: "/task/subdivide", icon: <LayoutDashboard size={20} /> },
+      { name: "작업일정", path: "/task/schedule", icon: <Calendar size={20} /> },
+      { name: "소분지시서", path: "/task/subdivide", icon: <LayoutDashboard size={20} /> },
+      { name: "패키지지시서", path: "/task/package", icon: <Box size={20} /> },
+      { name: "분류데이터", path: "/task/data", icon: <Database size={20} /> },
+    ]
+  },
+  {
+    title: "배송관리",
+    items: [
+      { name: "배송일정", path: "/logistics/schedule", icon: <Calendar size={20} /> },
+      { name: "배송블럭/순번", path: "/logistics/block", icon: <MapPin size={20} /> },
       { name: "상차지시서", path: "/logistics/loading", icon: <Box size={20} /> },
-      { name: "배송관제 (실시간)", path: "/logistics/tracking", icon: <Truck size={20} /> },
-      { name: "수령 확인증", path: "/logistics/receipt", icon: <CheckCircle2 size={20} /> },
+      { name: "실시간 배송상태", path: "/logistics/tracking", icon: <Truck size={20} /> },
+      { name: "수령확인증", path: "/logistics/receipt", icon: <CheckCircle2 size={20} /> },
     ]
   },
   {
-    title: "대금 정산",
+    title: "정산/청구관리",
     items: [
-      { name: "매출 명세서", path: "/billing", icon: <Receipt size={20} /> },
+      { name: "보건소청구작업", path: "/billing", icon: <Receipt size={20} /> },
+      { name: "거래처결제내역", path: "/billing/partners", icon: <Receipt size={20} /> },
     ]
   },
   {
-    title: "시스템",
+    title: "시스템관리",
     items: [
-      { name: "데이터 마이그레이션", path: "/system/check", icon: <Settings size={20} /> },
+      { name: "DB연동/시스템점검", path: "/system/check", icon: <Settings size={20} /> },
     ]
   }
 ];
