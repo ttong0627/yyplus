@@ -4,8 +4,10 @@ import { Utils } from '../../utils';
 import { Ic } from '../../components/common/Icons';
 
 export default function SystemPage() {
-  const { st, updateSt, showToast, showConfirm, dbReady, fbUser } = useApp();
+  const { st, updateSt, showToast, showConfirm, dbReady, fbUser, migrateTmsData } = useApp();
   const [importing, setImporting] = useState(false);
+  const [migrating, setMigrating] = useState(false);
+  const [migrateResult, setMigrateResult] = useState(null);
 
   const exportData = () => {
     const blob = new Blob([JSON.stringify(st, null, 2)], { type: 'application/json' });
@@ -24,13 +26,34 @@ export default function SystemPage() {
       try {
         const data = JSON.parse(ev.target.result);
         showConfirm('백업 데이터를 복원하시겠습니까?\n현재 데이터가 모두 덮어씌워집니다.', () => {
+          setImporting(true);
           Object.keys(data).forEach(key => { if (data[key] !== undefined) updateSt(key, data[key]); });
           showToast('데이터 복원이 완료되었습니다.', 'success');
+          setImporting(false);
         });
       } catch { showToast('파일 형식이 올바르지 않습니다.', 'error'); }
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  const handleMigrate = () => {
+    showConfirm(
+      'wellshare-tms DB에서 기존 데이터 전체를 가져옵니다.\n(보건소, 품목, 거래처, 발주, 정산, 매핑 등)\n\n현재 데이터가 덮어씌워집니다. 계속하시겠습니까?',
+      async () => {
+        setMigrating(true);
+        setMigrateResult(null);
+        try {
+          const result = await migrateTmsData();
+          setMigrateResult(result);
+          showToast(`가져오기 완료! 보건소 ${result.clients}개, 품목 ${result.items}개, 발주 ${result.clientOrders}개`, 'success');
+        } catch (e) {
+          showToast('가져오기 실패: ' + e.message, 'error');
+        } finally {
+          setMigrating(false);
+        }
+      }
+    );
   };
 
   const resetCollection = (key) => {
@@ -75,27 +98,59 @@ export default function SystemPage() {
             <p className={`font-black text-sm ${fbUser ? 'text-emerald-400' : 'text-slate-400'}`}>{fbUser ? '✓ 인증됨' : '미인증'}</p>
           </div>
           <div className="p-3 rounded-xl border bg-indigo-900/20 border-indigo-700">
-            <p className="text-xs font-bold text-slate-400 mb-1">프로젝트</p>
-            <p className="font-black text-sm text-indigo-400">wssc-nutrition</p>
+            <p className="text-xs font-bold text-slate-400 mb-1">Firebase 프로젝트</p>
+            <p className="font-black text-sm text-indigo-400">wellshare-tms</p>
           </div>
+        </div>
+      </div>
+
+      {/* ★ TMS 데이터 가져오기 */}
+      <div className="card border-amber-700/50 bg-amber-900/10">
+        <h2 className="section-title text-amber-400">기존 DB 데이터 가져오기</h2>
+        <p className="text-xs text-slate-400 mb-4">
+          wellshare-tms Firebase의 기존 데이터(보건소·품목·거래처·발주·정산·매핑 등 전체)를<br/>
+          통합 시스템 DB로 가져옵니다. 데이터가 없거나 비어있을 때 실행하세요.
+        </p>
+        <div className="flex items-center gap-4 flex-wrap">
+          <button
+            onClick={handleMigrate}
+            disabled={migrating || !dbReady}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-sm transition-all disabled:opacity-50"
+            style={{ background: migrating ? 'rgba(245,158,11,0.1)' : 'rgba(245,158,11,0.2)', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.4)' }}>
+            {migrating ? '⏳ 가져오는 중...' : '⚡ 기존 DB 전체 가져오기'}
+          </button>
+          {migrateResult && (
+            <div className="text-xs font-bold rounded-lg px-4 py-2"
+              style={{ background: 'rgba(16,185,129,0.1)', color: '#34d399', border: '1px solid rgba(16,185,129,0.25)' }}>
+              ✅ 완료 — 보건소 {migrateResult.clients}개 · 품목 {migrateResult.items}개 ·
+              거래처 {migrateResult.suppliers}개 · 발주 {migrateResult.clientOrders}개 ·
+              사용자 {migrateResult.users}명
+            </div>
+          )}
         </div>
       </div>
 
       {/* 데이터 현황 */}
       <div className="card">
-        <h2 className="section-title">데이터 현황</h2>
+        <h2 className="section-title">현재 데이터 현황</h2>
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
           {collections.map(col => {
             const data = st[col.key];
             const count = Array.isArray(data) ? data.length : (data && typeof data === 'object' ? Object.keys(data).length : 0);
+            const isEmpty = count === 0;
             return (
-              <div key={col.key} className="bg-slate-700/50 rounded-lg p-2 text-center">
-                <p className="text-xs text-slate-400 font-bold">{col.label}</p>
-                <p className="text-lg font-black text-white">{count}</p>
+              <div key={col.key}
+                className="rounded-lg p-2 text-center"
+                style={{ background: isEmpty ? 'rgba(239,68,68,0.08)' : 'rgba(71,85,105,0.3)', border: isEmpty ? '1px solid rgba(239,68,68,0.2)' : '1px solid transparent' }}>
+                <p className="text-xs font-bold" style={{ color: isEmpty ? '#f87171' : '#94a3b8' }}>{col.label}</p>
+                <p className="text-lg font-black" style={{ color: isEmpty ? '#f87171' : '#fff' }}>{count}</p>
               </div>
             );
           })}
         </div>
+        {collections.some(col => { const d = st[col.key]; return Array.isArray(d) ? d.length === 0 : !d || Object.keys(d).length === 0; }) && (
+          <p className="text-xs text-amber-400 mt-3 font-bold">⚠️ 빨간색 항목은 데이터가 없습니다. 위 "기존 DB 전체 가져오기" 버튼을 실행하세요.</p>
+        )}
       </div>
 
       {/* 백업/복원 */}

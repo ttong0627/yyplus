@@ -5,7 +5,7 @@ import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 
 const COLL = 'wssc_unified';
 
-// 기존 ERP Firestore 경로 후보 (appId가 무엇이었는지 모르므로 순서대로 시도)
+// 기존 ERP Firestore 경로 후보
 const LEGACY_PATHS = [
   ['artifacts', 'default-app-id', 'public', 'data', 'erp_sync', 'main_state'],
   ['artifacts', '1:845373489879:web:acf85d5395f0739d0b2692', 'public', 'data', 'erp_sync', 'main_state'],
@@ -38,6 +38,46 @@ const INITIAL_STATE = {
   deliveryTrips: [],
   deliveryRecords: [],
 };
+
+// tms-unified 플랫 컬렉션 → wssc_unified 변환 & 저장
+async function runTmsMigration(db) {
+  const [clientsSnap, itemsSnap, partnersSnap, usersSnap, ordersSnap, delivSnap, invSnap, mapSnap] = await Promise.all([
+    getDocs(collection(db, 'clients')),
+    getDocs(collection(db, 'items')),
+    getDocs(collection(db, 'partners')),
+    getDocs(collection(db, 'users')),
+    getDocs(collection(db, 'clientOrders')),
+    getDocs(collection(db, 'deliveries')),
+    getDocs(collection(db, 'invoices')),
+    getDocs(collection(db, 'mappings')),
+  ]);
+  const toArr = snap => snap.docs.map(d => ({ fbId: d.id, ...d.data() }));
+  const clients        = toArr(clientsSnap);
+  const items          = toArr(itemsSnap);
+  const suppliers      = toArr(partnersSnap);
+  const tmsUsers       = toArr(usersSnap);
+  const clientOrders   = toArr(ordersSnap);
+  const deliveryRecords = toArr(delivSnap);
+  const payments       = toArr(invSnap);
+  const mappings       = toArr(mapSnap);
+
+  const writes = [];
+  if (clients.length)        writes.push(setDoc(doc(db, COLL, 'clients'),        { data: clients }));
+  if (items.length)          writes.push(setDoc(doc(db, COLL, 'items'),          { data: items }));
+  if (suppliers.length)      writes.push(setDoc(doc(db, COLL, 'suppliers'),      { data: suppliers }));
+  if (clientOrders.length)   writes.push(setDoc(doc(db, COLL, 'clientOrders'),   { data: clientOrders }));
+  if (deliveryRecords.length) writes.push(setDoc(doc(db, COLL, 'deliveryRecords'), { data: deliveryRecords }));
+  if (payments.length)       writes.push(setDoc(doc(db, COLL, 'payments'),       { data: payments }));
+  if (mappings.length)       writes.push(setDoc(doc(db, COLL, 'mappings'),       { data: mappings }));
+
+  const mergedUsers = tmsUsers.length > 0
+    ? [...tmsUsers.map(u => ({ ...u, password: u.password || 'admin1234' })), DEFAULT_ADMIN]
+    : [DEFAULT_ADMIN];
+  writes.push(setDoc(doc(db, COLL, 'users'), { data: mergedUsers }));
+
+  await Promise.all(writes);
+  return { clients: clients.length, items: items.length, suppliers: suppliers.length, clientOrders: clientOrders.length, users: mergedUsers.length };
+}
 
 const AppContext = createContext(null);
 
@@ -83,13 +123,19 @@ export function AppProvider({ children }) {
     let unsubSnap = null;
 
     const init = async () => {
-      // 1단계: wssc_unified/users 확인
-      const usersSnap = await getDoc(doc(db, COLL, 'users')).catch(() => null);
-      const hasNewData = usersSnap?.exists() && Array.isArray(usersSnap.data()?.data) && usersSnap.data().data.length > 0;
+      // 1단계: wssc_unified/users + clients 동시 확인 (둘 다 있어야 마이그레이션 완료)
+      const [usersSnap, clientsCheckSnap] = await Promise.all([
+        getDoc(doc(db, COLL, 'users')).catch(() => null),
+        getDoc(doc(db, COLL, 'clients')).catch(() => null),
+      ]);
+      const hasUsers   = usersSnap?.exists()        && Array.isArray(usersSnap.data()?.data)        && usersSnap.data().data.length > 0;
+      const hasClients = clientsCheckSnap?.exists() && Array.isArray(clientsCheckSnap.data()?.data) && clientsCheckSnap.data().data.length > 0;
+      const hasNewData = hasUsers && hasClients;
 
       if (!hasNewData && !cancelled) {
-        // 2단계: 기존 ERP 경로 순서대로 시도
         let migrated = false;
+
+        // 2단계: 기존 wssc-erp-v2 ERP 경로 시도
         for (const pathParts of LEGACY_PATHS) {
           if (migrated || cancelled) break;
           try {
@@ -97,62 +143,23 @@ export function AppProvider({ children }) {
             if (oldSnap.exists()) {
               const oldData = oldSnap.data();
               if (Array.isArray(oldData.users) && oldData.users.length > 0) {
-                // 기존 ERP 데이터 발견 → wssc_unified로 이전
                 const keys = Object.keys(INITIAL_STATE).filter(k => oldData[k] !== undefined);
-                await Promise.all(
-                  keys.map(k => setDoc(doc(db, COLL, k), { data: JSON.parse(JSON.stringify(oldData[k])) }))
-                );
+                await Promise.all(keys.map(k => setDoc(doc(db, COLL, k), { data: JSON.parse(JSON.stringify(oldData[k])) })));
                 migrated = true;
               }
             }
-          } catch { /* 권한 없거나 없는 경로는 무시 */ }
+          } catch { /* 권한 없거나 없는 경로 무시 */ }
         }
 
-        // 3단계: tms-unified 플랫 컬렉션 마이그레이션 시도
+        // 3단계: tms-unified 플랫 컬렉션 마이그레이션
         if (!migrated && !cancelled) {
           try {
-            const [clientsSnap, itemsSnap, partnersSnap, usersSnap, ordersSnap, delivSnap, invSnap, mapSnap] = await Promise.all([
-              getDocs(collection(db, 'clients')),
-              getDocs(collection(db, 'items')),
-              getDocs(collection(db, 'partners')),
-              getDocs(collection(db, 'users')),
-              getDocs(collection(db, 'clientOrders')),
-              getDocs(collection(db, 'deliveries')),
-              getDocs(collection(db, 'invoices')),
-              getDocs(collection(db, 'mappings')),
-            ]);
-            const toArr = snap => snap.docs.map(d => ({ fbId: d.id, ...d.data() }));
-            const clients   = toArr(clientsSnap);
-            const items     = toArr(itemsSnap);
-            const suppliers = toArr(partnersSnap);
-            const tmsUsers  = toArr(usersSnap);
-            const clientOrders  = toArr(ordersSnap);
-            const deliveryRecords = toArr(delivSnap);
-            const payments  = toArr(invSnap);
-            const mappings  = toArr(mapSnap);
-
-            if (clients.length > 0 || items.length > 0) {
-              const writes = [
-                clients.length       && setDoc(doc(db, COLL, 'clients'),       { data: clients }),
-                items.length         && setDoc(doc(db, COLL, 'items'),         { data: items }),
-                suppliers.length     && setDoc(doc(db, COLL, 'suppliers'),     { data: suppliers }),
-                clientOrders.length  && setDoc(doc(db, COLL, 'clientOrders'), { data: clientOrders }),
-                deliveryRecords.length && setDoc(doc(db, COLL, 'deliveryRecords'), { data: deliveryRecords }),
-                payments.length      && setDoc(doc(db, COLL, 'payments'),     { data: payments }),
-                mappings.length      && setDoc(doc(db, COLL, 'mappings'),     { data: mappings }),
-              ].filter(Boolean);
-              // 사용자: tms 기존 사용자 + DEFAULT_ADMIN 병합
-              const mergedUsers = tmsUsers.length > 0
-                ? [...tmsUsers.map(u => ({ ...u, password: u.password || 'admin1234' })), DEFAULT_ADMIN]
-                : [DEFAULT_ADMIN];
-              writes.push(setDoc(doc(db, COLL, 'users'), { data: mergedUsers }));
-              await Promise.all(writes);
-              migrated = true;
-            }
+            const result = await runTmsMigration(db);
+            if (result.clients > 0 || result.items > 0) migrated = true;
           } catch { /* 플랫 컬렉션 없으면 무시 */ }
         }
 
-        // 4단계: 어디서도 데이터 없으면 기본 관리자 생성
+        // 4단계: 아무 데이터 없음 → 기본 관리자만 생성
         if (!migrated && !cancelled) {
           await setDoc(doc(db, COLL, 'users'), { data: [DEFAULT_ADMIN] }).catch(() => {});
         }
@@ -191,6 +198,12 @@ export function AppProvider({ children }) {
     });
   }, [fbUser]);
 
+  // SystemPage에서 호출 가능한 강제 마이그레이션 함수
+  const migrateTmsData = useCallback(async () => {
+    if (!db || !fbUser) throw new Error('DB 미연결');
+    return await runTmsMigration(db);
+  }, [fbUser]);
+
   const login = useCallback((user, keepLogin) => {
     setCUser(user);
     if (keepLogin) localStorage.setItem('wssc_u_session', JSON.stringify(user));
@@ -217,6 +230,7 @@ export function AppProvider({ children }) {
       confirm, showConfirm, hideConfirm,
       globalMonth, setGlobalMonth,
       addLog,
+      migrateTmsData,
     }}>
       {children}
     </AppContext.Provider>
