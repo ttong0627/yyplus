@@ -1,0 +1,12 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /wssc_unified/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+    // 기존 ERP(wssc-erp) 데이터 경로 — 읽기/쓰기 모두 허용
+    match /artifacts/{appId}/{path=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
