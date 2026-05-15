@@ -9,7 +9,7 @@ const MENUS = [
     roles: ['admin','office','logistics','driver'],
   },
   {
-    id: 'erp', label: '발주/청구/결재', icon: 'Serv', roles: ['admin','office','logistics'],
+    id: 'erp', label: '발주 관리', icon: 'Serv', roles: ['admin','office','logistics'],
     children: [
       { id:'clients',      label:'보건소 관리',    icon:'Bldg',  path:'/erp/clients',       roles:['admin','office'] },
       { id:'users',        label:'사용자 관리',    icon:'User',  path:'/erp/users',         roles:['admin'] },
