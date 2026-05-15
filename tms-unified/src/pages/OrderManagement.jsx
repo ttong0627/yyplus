@@ -76,14 +76,7 @@ export function OrderRegister() {
 
   return (
     <div className="w-full h-full bg-[#f8f9fc] p-6 lg:p-10 animate-fade-in flex flex-col font-['Pretendard','Inter',sans-serif]">
-      {/* Flattened Header */}
-      <div className="mb-8">
-        <h2 className="text-3xl font-black text-[#2d3748] flex items-center gap-3 tracking-tight">
-          <FileCheck2 className="text-[#805ad5] w-8 h-8" />
-          스마트 발주 입력 (1-Click)
-        </h2>
-        <p className="text-[#718096] font-semibold mt-2 text-base">엑셀 데이터를 붙여넣으면 즉시 표로 변환되어 저장 가능합니다.</p>
-      </div>
+      {/* Removed Header to maximize workspace */}
 
       <div className="flex-1 bg-white rounded-[32px] shadow-[0_10px_40px_rgba(0,0,0,0.06)] border border-[#e2e8f0] flex flex-col relative overflow-hidden">
         {/* Title Bar like Legacy */}
@@ -203,14 +196,7 @@ export function OrderSummary() {
 
   return (
     <div className="w-full h-full bg-[#f8f9fc] p-6 lg:p-10 animate-fade-in flex flex-col font-['Pretendard','Inter',sans-serif]">
-      {/* Flattened Header */}
-      <div className="mb-8">
-        <h2 className="text-3xl font-black text-[#2d3748] flex items-center gap-3 tracking-tight">
-          <Brain className="text-[#805ad5] w-8 h-8" />
-          AI 발주 집계 (1-Click)
-        </h2>
-        <p className="text-[#718096] font-semibold mt-2 text-base">각 보건소의 발주량을 취합하고 야채/과일의 로스율(5~10%)을 자동 반영하여 추천 발주량을 산출합니다.</p>
-      </div>
+      {/* Removed Header to maximize workspace */}
 
       <div className="flex-1 bg-white rounded-[32px] shadow-[0_10px_40px_rgba(0,0,0,0.06)] border border-[#e2e8f0] flex flex-col overflow-hidden relative">
         <div className="flex justify-between items-center px-8 py-6 border-b border-[#edf2f7] bg-[#faf5ff]/30">

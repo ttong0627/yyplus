@@ -12,47 +12,10 @@ export default function MasterData() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const tabs = [
-    { id: 'clinic', name: '보건소 관리', icon: <MapPin size={18} />, path: '/basic/clinic' },
-    { id: 'items', name: '품목 관리', icon: <Box size={18} />, path: '/basic/items' },
-    { id: 'partners', name: '거래처 관리', icon: <Database size={18} />, path: '/basic/partners' },
-    { id: 'users', name: '사용자 관리', icon: <Users size={18} />, path: '/basic/users' },
-  ];
-
   return (
     <div className="w-full h-full p-4 sm:p-6 animate-fade-in flex flex-col">
-      {/* Header & Tabs */}
-      <div className="bg-white/70 backdrop-blur-md rounded-[2rem] shadow-sm border border-white/80 p-4 sm:p-6 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-            <Database className="text-indigo-600" />
-            기초 데이터 통합 관리
-          </h2>
-          <p className="text-sm font-bold text-slate-500 mt-1">시스템 운영에 필요한 기본 제원(마스터 데이터)을 관리합니다.</p>
-        </div>
-        
-        <div className="flex bg-slate-100/80 p-1.5 rounded-2xl w-full md:w-auto overflow-x-auto no-scrollbar">
-          {tabs.map(tab => {
-            const isActive = location.pathname.includes(tab.path);
-            return (
-              <button
-                key={tab.id}
-                onClick={() => navigate(tab.path)}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black transition-all whitespace-nowrap ${
-                  isActive 
-                    ? 'bg-white text-indigo-700 shadow-sm' 
-                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
-                }`}
-              >
-                {tab.icon} {tab.name}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Content Area */}
-      <div className="flex-1 bg-white/70 backdrop-blur-md rounded-[2rem] shadow-sm border border-white/80 overflow-hidden flex flex-col relative">
+      {/* Content Area - Flattened 100% Height */}
+      <div className="w-full h-full bg-white/70 backdrop-blur-md rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/80 overflow-hidden flex flex-col relative">
          <Routes>
            <Route path="/" element={<Navigate to="/basic/clinic" replace />} />
            <Route path="clinic" element={<DataManager collectionName="clients" title="보건소" fields={[{k:'name', l:'보건소명'}, {k:'shortName', l:'단축명(표시용)'}, {k:'manager', l:'담당자'}, {k:'contact', l:'연락처'}, {k:'inspectTime', l:'검수시간'}, {k:'inspectLocation', l:'검수장소'}]} />} />

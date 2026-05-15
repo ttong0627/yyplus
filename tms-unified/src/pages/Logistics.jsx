@@ -12,42 +12,10 @@ export default function LogisticsModule() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const tabs = [
-    { id: 'tracking', name: '실시간 관제', icon: <Navigation size={18} />, path: '/logistics/tracking' },
-    { id: 'loading', name: '상차 지시서', icon: <Box size={18} />, path: '/logistics/loading' },
-    { id: 'receipt', name: '수령 확인증', icon: <FileText size={18} />, path: '/logistics/receipt' },
-  ];
-
   return (
     <div className="w-full h-full p-4 sm:p-6 animate-fade-in flex flex-col">
-      <div className="bg-white/70 backdrop-blur-md rounded-[2rem] shadow-sm border border-white/80 p-4 sm:p-6 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-            <Truck className="text-blue-600" />
-            배송/물류 통합 관제탑
-          </h2>
-          <p className="text-sm font-bold text-slate-500 mt-1">실시간 배차, 상차 검수, GPS 기반 배송 현황 트래킹</p>
-        </div>
-        
-        <div className="flex bg-slate-100/80 p-1.5 rounded-2xl w-full md:w-auto overflow-x-auto no-scrollbar">
-          {tabs.map(tab => {
-            const isActive = location.pathname.includes(tab.path);
-            return (
-              <button
-                key={tab.id}
-                onClick={() => navigate(tab.path)}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black transition-all whitespace-nowrap ${
-                  isActive ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
-                }`}
-              >
-                {tab.icon} {tab.name}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="flex-1 bg-white/70 backdrop-blur-md rounded-[2rem] shadow-sm border border-white/80 overflow-hidden flex flex-col relative">
+      {/* Content Area - Flattened 100% Height */}
+      <div className="w-full h-full bg-white/70 backdrop-blur-md rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/80 overflow-hidden flex flex-col relative">
          <Routes>
            <Route path="/" element={<Navigate to="/logistics/tracking" replace />} />
            <Route path="tracking" element={<DeliveryTracking />} />
