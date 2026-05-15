@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "wssc-nutrition"
-  }
+  },
+  "targets": {
+    "wssc-nutrition": {
+      "hosting": {
+        "erp": [
+          "wssc-erp"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

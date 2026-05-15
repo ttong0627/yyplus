@@ -24,7 +24,6 @@ const MENUS = [
       { id:'orderSum',     label:'AI 집계(참고)',  icon:'ListP', path:'/erp/order-summary', roles:['admin','office'] },
       { id:'purchase',     label:'구매요청',       icon:'File',  path:'/erp/purchase',      roles:['admin','office'] },
       { id:'receipt',      label:'입고 확인',      icon:'Down',  path:'/erp/receipt',       roles:['admin','logistics'] },
-      { id:'workOrder',    label:'소분 지시서',    icon:'ListP', path:'/erp/work-order',    roles:['admin','office'] },
       { id:'settlement',   label:'자동 정산/청구', icon:'Card',  path:'/erp/settlement',    roles:['admin','office'] },
       { id:'payment',      label:'대금 정산',      icon:'Card',  path:'/erp/payment',       roles:['admin','office'] },
       { id:'system',       label:'시스템 점검',    icon:'Serv',  path:'/erp/system',        roles:['admin'] },
@@ -33,8 +32,9 @@ const MENUS = [
   {
     id: 'package', label: '패키지 관리', icon: 'Box', roles: ['admin','office','logistics'],
     children: [
-      { id:'pkgCal',  label:'작업 일정',    icon:'Cal',    path:'/package/calendar', roles:['admin','office','logistics'] },
-      { id:'pkgReg',  label:'패키지 구성',  icon:'Edit',   path:'/package/register', roles:['admin','office'] },
+      { id:'pkgCal',    label:'작업 일정',    icon:'Cal',    path:'/package/calendar',  roles:['admin','office','logistics'] },
+      { id:'workOrder', label:'소분 지시서', icon:'ListP',  path:'/erp/work-order',    roles:['admin','office'] },
+      { id:'pkgReg',    label:'패키지 구성', icon:'Edit',   path:'/package/register',  roles:['admin','office'] },
       { id:'pkgMat',  label:'소분작업내역', icon:'ListO',  path:'/package/matrix',   roles:['admin','office','logistics'] },
       { id:'pkgPick', label:'패킹 지시서',  icon:'ListP',  path:'/package/picking',  roles:['admin','office','logistics'] },
       { id:'pkgPrt',  label:'패키지 출력',  icon:'Print2', path:'/package/print',    roles:['admin','office','logistics'] },

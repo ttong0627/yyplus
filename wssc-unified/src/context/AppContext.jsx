@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { db, auth } from '../firebaseConfig';
-import { collection, doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
+import { collection, doc, setDoc, getDoc, getDocs, onSnapshot } from 'firebase/firestore';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 
 const COLL = 'wssc_unified';
@@ -108,7 +108,51 @@ export function AppProvider({ children }) {
           } catch { /* 권한 없거나 없는 경로는 무시 */ }
         }
 
-        // 3단계: 어디서도 데이터 없으면 기본 관리자 생성
+        // 3단계: tms-unified 플랫 컬렉션 마이그레이션 시도
+        if (!migrated && !cancelled) {
+          try {
+            const [clientsSnap, itemsSnap, partnersSnap, usersSnap, ordersSnap, delivSnap, invSnap, mapSnap] = await Promise.all([
+              getDocs(collection(db, 'clients')),
+              getDocs(collection(db, 'items')),
+              getDocs(collection(db, 'partners')),
+              getDocs(collection(db, 'users')),
+              getDocs(collection(db, 'clientOrders')),
+              getDocs(collection(db, 'deliveries')),
+              getDocs(collection(db, 'invoices')),
+              getDocs(collection(db, 'mappings')),
+            ]);
+            const toArr = snap => snap.docs.map(d => ({ fbId: d.id, ...d.data() }));
+            const clients   = toArr(clientsSnap);
+            const items     = toArr(itemsSnap);
+            const suppliers = toArr(partnersSnap);
+            const tmsUsers  = toArr(usersSnap);
+            const clientOrders  = toArr(ordersSnap);
+            const deliveryRecords = toArr(delivSnap);
+            const payments  = toArr(invSnap);
+            const mappings  = toArr(mapSnap);
+
+            if (clients.length > 0 || items.length > 0) {
+              const writes = [
+                clients.length       && setDoc(doc(db, COLL, 'clients'),       { data: clients }),
+                items.length         && setDoc(doc(db, COLL, 'items'),         { data: items }),
+                suppliers.length     && setDoc(doc(db, COLL, 'suppliers'),     { data: suppliers }),
+                clientOrders.length  && setDoc(doc(db, COLL, 'clientOrders'), { data: clientOrders }),
+                deliveryRecords.length && setDoc(doc(db, COLL, 'deliveryRecords'), { data: deliveryRecords }),
+                payments.length      && setDoc(doc(db, COLL, 'payments'),     { data: payments }),
+                mappings.length      && setDoc(doc(db, COLL, 'mappings'),     { data: mappings }),
+              ].filter(Boolean);
+              // 사용자: tms 기존 사용자 + DEFAULT_ADMIN 병합
+              const mergedUsers = tmsUsers.length > 0
+                ? [...tmsUsers.map(u => ({ ...u, password: u.password || 'admin1234' })), DEFAULT_ADMIN]
+                : [DEFAULT_ADMIN];
+              writes.push(setDoc(doc(db, COLL, 'users'), { data: mergedUsers }));
+              await Promise.all(writes);
+              migrated = true;
+            }
+          } catch { /* 플랫 컬렉션 없으면 무시 */ }
+        }
+
+        // 4단계: 어디서도 데이터 없으면 기본 관리자 생성
         if (!migrated && !cancelled) {
           await setDoc(doc(db, COLL, 'users'), { data: [DEFAULT_ADMIN] }).catch(() => {});
         }

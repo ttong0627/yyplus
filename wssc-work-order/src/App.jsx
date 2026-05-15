@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, setDoc, onSnapshot, collection } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, onSnapshot, collection } from 'firebase/firestore';
 
 const Ico = ({ size=24, className='', d, children }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} shrink-0="true">{d ? <path d={d}/> : children}</svg>;
 const Ic = {
@@ -40,11 +40,18 @@ const IS_CANVAS = typeof __firebase_config !== 'undefined';
 let app = null, auth = null, db = null;
 try {
   const fc = IS_CANVAS ? JSON.parse(__firebase_config) : { apiKey: "AIzaSyDfgyTteXS9p-ksXVAgX0J34K1ExPAWUPk", authDomain: "wssc-nutrition.firebaseapp.com", projectId: "wssc-nutrition", storageBucket: "wssc-nutrition.firebasestorage.app", messagingSenderId: "845373489879", appId: "1:845373489879:web:acf85d5395f0739d0b2692" };
-  if (fc && fc.apiKey && fc.apiKey !== "여기에_apiKey를_입력하세요") { app = !getApps().length ? initializeApp(fc) : getApp(); auth = getAuth(app); db = initializeFirestore(app, { localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()}) }); }
+  if (fc && fc.apiKey && fc.apiKey !== "여기에_apiKey를_입력하세요") { app = !getApps().length ? initializeApp(fc) : getApp(); auth = getAuth(app); db = getFirestore(app); }
 } catch(e) { console.error(e); }
 
 const appId = typeof __app_id !== 'undefined' ? String(__app_id).replace(/\//g, '_') : 'wssc-production';
-const getSyncDocRef = (dbObj, key) => IS_CANVAS ? doc(dbObj, 'artifacts', appId, 'public', 'data', 'wssc_state', key) : doc(dbObj, 'wssc_system_state', key);
+const getSyncDocRef = (dbObj, key) => IS_CANVAS ? doc(dbObj, 'artifacts', appId, 'public', 'data', 'wssc_state', key) : doc(dbObj, 'wssc_unified', key);
+
+const hashPw = async (password) => {
+  try {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(password));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch { return password; }
+};
 
 const INITIAL_APP_STATE = { clients: [], items: [], mappings: [], categorySortOrder: ['유제품', '가공품', '농산물', '미곡'], packageOrders: [], clientOrders: [], workSchedules: [], suppliers: [], users: [] };
 
@@ -340,7 +347,7 @@ function WorkOrderApp() {
   useEffect(() => {
     if (!user || !db) return; 
     let isCancelled = false;
-    const collRef = IS_CANVAS ? collection(db, 'artifacts', appId, 'public', 'data', 'wssc_state') : collection(db, 'wssc_system_state');
+    const collRef = IS_CANVAS ? collection(db, 'artifacts', appId, 'public', 'data', 'wssc_state') : collection(db, 'wssc_unified');
     const unsub = onSnapshot(collRef, (snapshot) => {
         if (isCancelled) return;
         setSt(prev => {
@@ -353,12 +360,15 @@ function WorkOrderApp() {
     return () => { isCancelled = true; unsub(); };
   }, [user?.uid]);
 
-  const handleLoginSubmit = (e) => {
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    const u = (st.users || []).find(x => x && x.id === loginData.id && x.password === loginData.pwd);
+    const hashedPwd = await hashPw(loginData.pwd);
+    const u = (st.users || []).find(x => x && x.id === loginData.id && (
+      (x.hashed && x.password === hashedPwd) || (!x.hashed && x.password === loginData.pwd)
+    ));
     if (u) {
        setCUser(u);
-       if (loginData.saveId) { localStorage.setItem('wssc_wo_savedId', loginData.id); localStorage.setItem('wssc_wo_saveId', 'true'); } 
+       if (loginData.saveId) { localStorage.setItem('wssc_wo_savedId', loginData.id); localStorage.setItem('wssc_wo_saveId', 'true'); }
        else { localStorage.removeItem('wssc_wo_savedId'); localStorage.setItem('wssc_wo_saveId', 'false'); }
        if (loginData.keepLog) localStorage.setItem('wssc_wo_cUser', JSON.stringify(u));
     } else alert('아이디 또는 비밀번호가 일치하지 않거나, 메인 시스템에 등록되지 않은 계정입니다.');

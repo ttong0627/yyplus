@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SyncContact - 무지연 스마트 주소록</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <h1 class="logo">Sync<span>Contact</span></h1>
+            <input type="text" id="searchInput" placeholder="이름이나 번호로 초고속 검색..." autocomplete="off">
+        </header>
+
+        <main>
+            <form id="contactForm" class="glass-panel">
+                <input type="text" id="name" placeholder="이름" required>
+                <input type="tel" id="phone" placeholder="전화번호" required>
+                <button type="submit" class="btn-primary">연락처 추가</button>
+            </form>
+
+            <div id="contactList" class="contact-list">
+                <!-- Javascript로 연락처가 무지연 렌더링됩니다 -->
+            </div>
+        </main>
+    </div>
+    <script type="module" src="app.js"></script>
+</body>
+</html>

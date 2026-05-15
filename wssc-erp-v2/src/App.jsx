@@ -1,7 +1,14 @@
 import React, { Component, useState, useEffect, useMemo, useCallback } from 'react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { WorkOrderView } from './components/WorkOrderView.jsx';
+import { LoadingOrderView } from './components/LoadingOrderView.jsx';
+import { DeliveryBlockRoutingView } from './components/DeliveryBlockRoutingView.jsx';
+import { DeliveryStatusView } from './components/DeliveryStatusView.jsx';
+import { PublicPortalView } from './components/PublicPortalView.jsx';
+import { MobileDriverAppView } from './components/MobileDriverAppView.jsx';
+import { SettlementView } from './components/SettlementView.jsx';
 
 const windowErrors = [];
 window.firebasePermissionDenied = false;
@@ -36,7 +43,7 @@ const Ico = ({ size=24, className='', d, children }) => (
   </svg>
 );
 
-const Ic = {
+export const Ic = {
   Dash: p=><Ico {...p}><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></Ico>,
   Box: p=><Ico {...p}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></Ico>,
   Users: p=><Ico {...p}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></Ico>,
@@ -86,18 +93,18 @@ const Ic = {
 };
 
 const localFirebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey: "AIzaSyDfgyTteXS9p-ksXVAgX0J34K1ExPAWUPk",
+  authDomain: "wssc-nutrition.firebaseapp.com",
+  projectId: "wssc-nutrition",
+  storageBucket: "wssc-nutrition.firebasestorage.app",
+  messagingSenderId: "845373489879",
+  appId: "1:845373489879:web:acf85d5395f0739d0b2692"
 };
 
 let app = null, auth = null, db = null, firebaseInitError = null;
 try {
   const fc = typeof __firebase_config === 'undefined' ? localFirebaseConfig : JSON.parse(__firebase_config);
-  if (fc?.apiKey && fc.apiKey !== "여기에_apiKey를_입력하세요") { app = !getApps().length ? initializeApp(fc) : getApp(); auth = getAuth(app); db = initializeFirestore(app, { localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()}) }); }
+  if (fc?.apiKey && fc.apiKey !== "여기에_apiKey를_입력하세요") { app = !getApps().length ? initializeApp(fc) : getApp(); auth = getAuth(app); db = getFirestore(app); }
 } catch(e) { firebaseInitError = e.message; windowErrors.push(`[FB Error] ${e.message}`); }
 
 const rawAppId = typeof __app_id !== 'undefined' ? String(__app_id) : 'default-app-id';
@@ -108,14 +115,14 @@ const INITIAL_APP_STATE = {
   items: [{ id: 'I001', category: '농산물', name: '친환경 감자 10kg 박스', unit: '박스', boxQuantity: 10, unitPrice: 2500, supplierId: 'S001', note: '' }],
   suppliers: [{ id: 'S001', name: '햇살농산물', manager: '김햇살', contact: '010-1111-2222', account: '농협', orderType: 'auto', favoriteAt: null }],
   clients: [{ id: 'C001', name: '수원시 팔달구 보건소 본관', shortName: '팔달보건소', manager: '박보건', contact: '031-228-1234', inspectTime: '08:30', inspectLocation: '1층', note: '' }],
-  inventory: [], clientOrders: [], mappings: [], payments: [], receipts: [],
+  inventory: [], clientOrders: [], mappings: [], payments: [], receipts: [], contracts: [], packageOrders: [], workSchedules: [],
   lossRates: { '미곡': 2, '잡곡': 1, '멸치': 3, '야채': 8, '과일': 10, '달걀': 5 },
   categorySortOrder: [], aiOrderOverrides: {}, itemLossRates: {}, purchaseRequests: [], weekMappings: {}, 
   systemLogs: [{ id: 'L01', date: new Date().toLocaleString('ko-KR'), message: '시스템 렌더링 무결성 최적화 및 엑셀 다운로드 계산식 정상화 완료' }],
   localSettings: { savedId: '', rememberId: false, keepLoggedIn: false, lastUserId: null, globalReflectSchedule: false }
 };
 
-const Utils = {
+export const Utils = {
   cleanData: d => JSON.parse(JSON.stringify(d)),
   trunc: (t, l=10) => t ? (String(t).length > l ? String(t).substring(0,l)+'...' : String(t)) : '',
   fmt: n => (n===undefined||n===null||n==='') ? '' : (isNaN(Number(n)) ? n : Number(n).toLocaleString('ko-KR', {maximumFractionDigits:2})),
@@ -131,6 +138,38 @@ const Utils = {
     const html = e.clipboardData?.getData('text/html'), txt = e.clipboardData?.getData('Text'); if (!txt && !html) return [];
     if (html && html.includes('<table')) { const p = Utils.parseHTML(html); if (p && p.length) return p; }
     if (txt) return txt.replace(/\r?\n$/, '').split(/\r?\n/).map(r => r.split('\t').map(t => ({ text: t.trim(), isPrimary: true }))); return [];
+  },
+  compressImage: (file, maxWidth = 800, quality = 0.6) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let w = img.width, h = img.height;
+          if (w > maxWidth) { h = Math.round((h * maxWidth) / w); w = maxWidth; }
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  },
+  uploadImageToStorage: async (base64Image, folder = 'delivery_photos') => {
+    try {
+      const { storage, ref, uploadString, getDownloadURL } = await import('./firebaseConfig.js');
+      if (!storage) return base64Image;
+      const fileName = `${folder}/photo_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+      const storageRef = ref(storage, fileName);
+      await uploadString(storageRef, base64Image, 'data_url');
+      return await getDownloadURL(storageRef);
+    } catch (e) {
+      console.error("Storage upload error:", e);
+      return base64Image;
+    }
   },
   dlExcelCustom: (htmlBody, fn) => {
     const tpl = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><style>table{border-collapse:collapse;font-family:'Malgun Gothic',sans-serif;font-size:9pt;width:100%;white-space:nowrap;}th,td{border:1px solid #000;padding:6px;vertical-align:middle;}th{background-color:#d9e1f2;font-weight:bold;text-align:center;}.num{mso-number-format:"General";text-align:right;}.txt{mso-number-format:"\\@";text-align:center;}.l{text-align:left;}.r{color:red;}.p{color:purple;font-weight:bold;}.bg-g{background:#f0f0f0;}.bg-b{background:#ddebf7;}.bg-gr{background:#e2efda;}.bg-r{background:#fce4d6;}.bg-p{background:#f3e8fd;}.bg-y{background:#fff2cc;}.hdr{font-size:16pt;background:#8b2f97;color:white;padding:10px;}.sub{font-size:8pt;color:#555;}</style></head><body>${htmlBody}</body></html>`;
@@ -384,25 +423,25 @@ const ScheduleManagement = ({ clients=[], clientOrders=[], setClientOrders, week
 
   return (
     <div className="space-y-6 animate-fade-in w-full flex flex-col h-full min-h-0">
-      <div className="flex justify-between items-end flex-none"><h2 className="text-2xl font-bold">스마트 배송일정 관리</h2><div className="flex gap-2"><button onClick={openWm} className="px-4 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl text-xs font-black hover:bg-blue-100 transition-colors flex items-center gap-1"><Ic.Cal size={16}/> 주차 매칭 설정</button><button onClick={handleExcel} className="px-4 py-2 bg-green-50 text-green-700 border border-green-200 rounded-xl text-xs font-black hover:bg-green-100 transition-colors flex items-center gap-1"><Ic.File size={16}/> 엑셀 다운로드 (달력형식)</button><button onClick={handlePrint} className="px-4 py-2 bg-gray-800 text-white rounded-xl text-xs font-black hover:bg-gray-900 transition-colors flex items-center gap-1"><Ic.Print size={16}/> 인쇄 미리보기</button></div></div>
-      <div className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-gray-100 flex-1 flex flex-col min-h-0 overflow-hidden"><div className="flex justify-between items-center mb-6 flex-none"><div className="flex gap-2 bg-gray-100 p-1.5 rounded-2xl"><button onClick={()=>setCd(new Date(yr, mo-1, 1))} className="p-2 rounded-xl hover:bg-white"><Ic.Left size={20}/></button><span className="font-black text-lg px-6 flex items-center text-blue-600">{yr}년 {mo+1}월</span><button onClick={()=>setCd(new Date(yr, mo+1, 1))} className="p-2 rounded-xl hover:bg-white"><Ic.Right size={20}/></button></div></div><div className="grid grid-cols-7 gap-1.5 bg-gray-50 p-2 rounded-[2rem] flex-1 overflow-y-auto scrollbar-hide">{['일','월','화','수','목','금','토'].map((d,i)=><div key={`hdr-${d}`} className={`py-3 text-center text-[12px] font-black ${i===0?'text-red-500':i===6?'text-blue-500':'text-gray-500'} sticky top-0 bg-gray-50 z-10`}>{d}</div>)}{arrDays.map((d, i) => { if(!d) return <div key={`pad-${i}`} className="min-h-[100px] bg-gray-100/30 rounded-2xl"></div>; const dS = `${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; const evts = clientOrders.filter(o=>o.deliveryDate1===dS||o.deliveryDate2===dS); return <div key={`day-${dS}`} onClick={()=>isLog&&setSm({is:true,d:dS})} className={`min-h-[100px] p-2 border-t flex flex-col rounded-2xl overflow-hidden group transition-all ${isLog?'cursor-pointer hover:shadow-md hover:-translate-y-1 hover:bg-white border-blue-100':''} ${evts.length?'bg-white shadow-sm':i%7===0?'bg-red-50/20':i%7===6?'bg-blue-50/20':'bg-gray-50/50'}`}><span className={`text-[12px] font-black mb-1.5 px-1 ${i%7===0?'text-red-500':i%7===6?'text-blue-500':'text-gray-500'}`}>{d}</span><div className="w-full space-y-1 content-start">{evts.map((o,sIdx) => <div key={`evt-${o.id}-${sIdx}`} onClick={e=>{e.stopPropagation();if(isLog)setConfirm({is:true,msg:`[${clients.find(c=>c.id===o.clientId)?.name}] 배송일정을 삭제할까요?`,onC:()=>{setClientOrders(p=>p.map(x=>x.id===o.id?{...x,[`deliveryDate${o.deliveryDate1===dS?1:2}`]:null}:x));setConfirm({is:false});toast('삭제됨');},onX:()=>setConfirm({is:false})});}} className={`p-1.5 rounded-lg shadow-sm text-[10px] font-black text-white hover:scale-95 transition-transform truncate break-keep ${o.deliveryDate1===dS?'bg-blue-500':'bg-green-500'}`}>{Utils.trunc(clients.find(c=>c.id===o.clientId)?.shortName, 8)}</div>)}</div></div>; })}</div></div>
+      <div className="flex justify-between items-end flex-none"><h2 className="text-2xl font-bold text-slate-800">작업 및 배송 스케줄러</h2><div className="flex gap-2"><button onClick={openWm} className="px-4 py-2 bg-pink-50 text-[#E94287] border border-pink-200 rounded-xl text-xs font-black hover:bg-pink-100 transition-colors flex items-center gap-1 shadow-sm"><Ic.Cal size={16}/> 주차 매칭 설정</button><button onClick={handleExcel} className="px-4 py-2 bg-[#29B4E3]/10 text-[#209bc5] border border-[#29B4E3]/30 rounded-xl text-xs font-black hover:bg-[#29B4E3]/20 transition-colors flex items-center gap-1 shadow-sm"><Ic.File size={16}/> 엑셀 다운로드 (달력형식)</button><button onClick={handlePrint} className="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-black hover:bg-slate-900 transition-colors flex items-center gap-1 shadow-sm"><Ic.Print size={16}/> 인쇄 미리보기</button></div></div>
+      <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-200 flex-1 flex flex-col min-h-0 overflow-hidden"><div className="flex justify-between items-center mb-6 flex-none"><div className="flex gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100"><button onClick={()=>setCd(new Date(yr, mo-1, 1))} className="p-2 rounded-xl hover:bg-white hover:shadow-sm transition-all"><Ic.Left size={20} className="text-slate-600"/></button><span className="font-black text-lg px-6 flex items-center text-[#8b2f97]">{yr}년 {mo+1}월</span><button onClick={()=>setCd(new Date(yr, mo+1, 1))} className="p-2 rounded-xl hover:bg-white hover:shadow-sm transition-all"><Ic.Right size={20} className="text-slate-600"/></button></div></div><div className="grid grid-cols-7 gap-1.5 bg-slate-50/50 p-2 rounded-[2rem] flex-1 overflow-y-auto scrollbar-hide">{['일','월','화','수','목','금','토'].map((d,i)=><div key={`hdr-${d}`} className={`py-3 text-center text-[12px] font-black ${i===0?'text-[#E94287]':i===6?'text-[#29B4E3]':'text-slate-500'} sticky top-0 bg-slate-50/90 backdrop-blur-sm z-10 rounded-xl`}>{d}</div>)}{arrDays.map((d, i) => { if(!d) return <div key={`pad-${i}`} className="min-h-[100px] bg-slate-100/30 rounded-2xl border border-transparent"></div>; const dS = `${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; const evts = clientOrders.filter(o=>o.deliveryDate1===dS||o.deliveryDate2===dS); return <div key={`day-${dS}`} onClick={()=>isLog&&setSm({is:true,d:dS})} className={`min-h-[100px] p-2 border border-slate-100 flex flex-col rounded-2xl overflow-hidden group transition-all duration-300 ${isLog?'cursor-pointer hover:shadow-lg hover:-translate-y-1 hover:border-[#E94287]/50 bg-white':''} ${evts.length?'bg-white shadow-sm ring-1 ring-[#8b2f97]/10':i%7===0?'bg-pink-50/30':i%7===6?'bg-cyan-50/30':'bg-slate-50/30'}`}><span className={`text-[12px] font-black mb-1.5 px-1 ${i%7===0?'text-[#E94287]':i%7===6?'text-[#29B4E3]':'text-slate-500'}`}>{d}</span><div className="w-full space-y-1.5 content-start">{evts.map((o,sIdx) => <div key={`evt-${o.id}-${sIdx}`} onClick={e=>{e.stopPropagation();if(isLog)setConfirm({is:true,msg:`[${clients.find(c=>c.id===o.clientId)?.name}] 배송일정을 삭제할까요?`,onC:()=>{setClientOrders(p=>p.map(x=>x.id===o.id?{...x,[`deliveryDate${o.deliveryDate1===dS?1:2}`]:null}:x));setConfirm({is:false});toast('일정이 삭제되었습니다.');},onX:()=>setConfirm({is:false})});}} className={`p-1.5 rounded-lg shadow-sm text-[10px] font-black text-white hover:scale-105 transition-transform truncate break-keep flex items-center justify-between gap-1 ${o.deliveryDate1===dS?'bg-gradient-to-r from-[#29B4E3] to-[#1da1cc]':'bg-gradient-to-r from-[#8b2f97] to-[#72267c]'}`}><span>{Utils.trunc(clients.find(c=>c.id===o.clientId)?.shortName, 8)}</span><span className="opacity-50 text-[8px]">{o.deliveryDate1===dS?'1차':'2차'}</span></div>)}</div></div>; })}</div></div>
       
       {sm.is && (
-        <div className="absolute inset-0 z-[9999] bg-slate-900/30 backdrop-blur-sm flex justify-center items-center p-4 sm:p-6 animate-fade-in notranslate" translate="no">
-          <div className="bg-white flex flex-col w-full max-w-sm rounded-[2.5rem] shadow-2xl border border-slate-200 max-h-[90vh]">
-            <div className="flex-none p-6 border-b border-slate-100 flex justify-between items-center bg-white rounded-t-[2.5rem]"><h3 className="text-xl font-black text-blue-600 flex items-center gap-2"><Ic.Truck size={24}/> 배송일 예약</h3><button onClick={()=>setSm({is:false})} className="p-2 bg-slate-100 rounded-full hover:text-rose-600 transition-colors"><Ic.X size={18}/></button></div>
-            <div className="flex-1 overflow-y-auto p-6 bg-slate-50 min-h-0 scrollbar-hide"><div className="text-center font-black text-2xl mb-6 text-gray-800">{sm.d}</div><form id="scForm" onSubmit={submit} className="space-y-4"><div><label className="text-xs font-black text-gray-500 block mb-2">대상 보건소 선택</label><select value={mc} onChange={e=>setMc(e.target.value)} className="w-full border-2 border-slate-200 p-4 rounded-xl text-sm font-black bg-white outline-none focus:border-blue-500" required><option value="">보건소를 선택하세요</option>{availC.map(c=><option key={`c-${c.id}`} value={c.id}>{c.name}</option>)}</select></div></form></div>
-            <div className="flex-none p-6 border-t border-slate-100 bg-white rounded-b-[2.5rem]"><button type="submit" form="scForm" className="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-xl font-black shadow-md transition-colors">예약 확정</button></div>
+        <div className="absolute inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex justify-center items-center p-4 sm:p-6 animate-fade-in notranslate" translate="no">
+          <div className="bg-white flex flex-col w-full max-w-sm rounded-[2.5rem] shadow-2xl border border-slate-200 max-h-[90vh] animate-scale-up">
+            <div className="flex-none p-6 border-b border-slate-100 flex justify-between items-center bg-white rounded-t-[2.5rem]"><h3 className="text-xl font-black text-[#8b2f97] flex items-center gap-2"><Ic.Cal size={24}/> {sm.d.split('-')[2]}일 작업/배송 예약</h3><button onClick={()=>setSm({is:false})} className="p-2 bg-slate-100 rounded-full hover:text-rose-600 transition-colors"><Ic.X size={18}/></button></div>
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-50 min-h-0 scrollbar-hide"><div className="text-center font-black text-3xl mb-8 text-[#E94287] bg-white py-4 rounded-2xl shadow-sm border border-slate-100">{sm.d}</div><form id="scForm" onSubmit={submit} className="space-y-4"><div><label className="text-xs font-black text-slate-500 block mb-2">대상 보건소 선택</label><select value={mc} onChange={e=>setMc(e.target.value)} className="w-full border-2 border-slate-200 p-4 rounded-xl text-sm font-black bg-white outline-none focus:border-[#E94287] transition-colors" required><option value="">보건소를 선택하세요</option>{availC.map(c=><option key={`c-${c.id}`} value={c.id}>{c.name}</option>)}</select><p className="text-[10px] text-slate-400 mt-2 ml-1 font-bold">* 1차/2차 배송일정은 자동 분리되어 저장됩니다.</p></div></form></div>
+            <div className="flex-none p-6 border-t border-slate-100 bg-white rounded-b-[2.5rem]"><button type="submit" form="scForm" className="w-full bg-gradient-to-r from-[#8b2f97] to-[#E94287] hover:shadow-lg hover:-translate-y-0.5 text-white p-4 rounded-xl font-black shadow-md transition-all">예약 확정</button></div>
           </div>
         </div>
       )}
 
       {showWm && (
-        <div className="absolute inset-0 z-[9999] bg-slate-900/30 backdrop-blur-sm flex justify-center items-center p-4 sm:p-6 animate-fade-in notranslate" translate="no">
-          <div className="bg-white flex flex-col w-full max-w-md rounded-[2.5rem] shadow-2xl border border-slate-200 max-h-[90vh]">
-            <div className="flex-none p-6 border-b border-slate-100 flex justify-between items-center bg-white rounded-t-[2.5rem]"><h3 className="text-xl font-black text-blue-600 flex items-center gap-2"><Ic.Cal size={24}/> {yr}년 {mo+1}월 주차 매칭</h3><button onClick={()=>setShowWm(false)} className="p-2 bg-slate-100 rounded-full hover:text-rose-600 transition-colors"><Ic.X size={18}/></button></div>
-            <div className="flex-1 overflow-y-auto p-6 bg-slate-50 space-y-4 min-h-0 scrollbar-hide"><p className="text-xs font-bold text-slate-500 mb-4">시작일과 종료일을 지정하면 AI 발주집계 시 해당 일정이 지정된 주차로 우선 묶입니다.</p>{[1,2,3,4].map(w => <div key={`wm-${w}`} className="flex items-center gap-3 bg-white p-3 rounded-xl shadow-sm border border-slate-200"><span className="font-black text-sm text-slate-700 w-12">{w}주차</span><input type="date" value={wmData[`w${w}`]?.s || ''} onChange={e => setWmData({...wmData, [`w${w}`]: {...wmData[`w${w}`], s: e.target.value}})} className="border p-2 rounded-lg text-xs font-black flex-1 outline-none focus:border-blue-500 text-slate-600" /><span className="text-slate-400 font-black">~</span><input type="date" value={wmData[`w${w}`]?.e || ''} onChange={e => setWmData({...wmData, [`w${w}`]: {...wmData[`w${w}`], e: e.target.value}})} className="border p-2 rounded-lg text-xs font-black flex-1 outline-none focus:border-blue-500 text-slate-600" /></div>)}</div>
-            <div className="flex-none p-6 border-t border-slate-100 bg-white flex gap-3 rounded-b-[2.5rem]"><button onClick={()=>setShowWm(false)} className="flex-1 border-2 border-slate-200 text-slate-600 py-3.5 rounded-xl font-black hover:bg-slate-50 transition-colors">취소</button><button onClick={saveWm} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-black shadow-md transition-colors">매칭 저장</button></div>
+        <div className="absolute inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex justify-center items-center p-4 sm:p-6 animate-fade-in notranslate" translate="no">
+          <div className="bg-white flex flex-col w-full max-w-md rounded-[2.5rem] shadow-2xl border border-slate-200 max-h-[90vh] animate-scale-up">
+            <div className="flex-none p-6 border-b border-slate-100 flex justify-between items-center bg-white rounded-t-[2.5rem]"><h3 className="text-xl font-black text-[#E94287] flex items-center gap-2"><Ic.ChkSq size={24}/> {yr}년 {mo+1}월 주차별 구간 설정</h3><button onClick={()=>setShowWm(false)} className="p-2 bg-slate-100 rounded-full hover:text-rose-600 transition-colors"><Ic.X size={18}/></button></div>
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-50 space-y-4 min-h-0 scrollbar-hide"><p className="text-xs font-bold text-slate-500 mb-4 bg-blue-50 text-blue-700 p-3 rounded-xl border border-blue-100">💡 시작일과 종료일을 정확히 지정해야, 향후 AI 발주집계 시 해당 주차의 수량이 완벽하게 매칭됩니다.</p>{[1,2,3,4].map(w => <div key={`wm-${w}`} className="flex items-center gap-3 bg-white p-3.5 rounded-2xl shadow-sm border border-slate-200 hover:border-[#E94287]/50 transition-colors"><span className="font-black text-sm text-slate-700 w-12 bg-slate-100 text-center py-1 rounded-lg">{w}주차</span><input type="date" value={wmData[`w${w}`]?.s || ''} onChange={e => setWmData({...wmData, [`w${w}`]: {...wmData[`w${w}`], s: e.target.value}})} className="border p-2.5 rounded-xl text-xs font-black flex-1 outline-none focus:border-[#E94287] text-slate-600 transition-colors" /><span className="text-slate-400 font-black">~</span><input type="date" value={wmData[`w${w}`]?.e || ''} onChange={e => setWmData({...wmData, [`w${w}`]: {...wmData[`w${w}`], e: e.target.value}})} className="border p-2.5 rounded-xl text-xs font-black flex-1 outline-none focus:border-[#E94287] text-slate-600 transition-colors" /></div>)}</div>
+            <div className="flex-none p-6 border-t border-slate-100 bg-white flex gap-3 rounded-b-[2.5rem]"><button onClick={()=>setShowWm(false)} className="flex-1 border-2 border-slate-200 text-slate-600 py-3.5 rounded-xl font-black hover:bg-slate-50 transition-colors">취소</button><button onClick={saveWm} className="flex-1 bg-gradient-to-r from-[#29B4E3] to-[#1da1cc] hover:shadow-lg hover:-translate-y-0.5 text-white py-3.5 rounded-xl font-black shadow-md transition-all">구간 저장</button></div>
           </div>
         </div>
       )}
@@ -887,6 +926,40 @@ const PaymentView = ({ payments=[], setPayments, suppliers=[], purchaseRequests=
   const fd = useMemo(() => payments.filter(p => (p.date||'').startsWith(globalMonth)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')), [payments, globalMonth]);
   useEffect(() => { setSel([]); }, [globalMonth]);
 
+  const handlePayment = (paymentData) => {
+    if(!isLog) return toast('결제 권한이 없습니다.');
+    if (paymentData.status === 'paid') {
+      if(!window.confirm('정말 결제를 취소 상태로 되돌리시겠습니까?')) return;
+      setPayments(payments.map(x => x.id === paymentData.id ? { ...x, status: 'unpaid' } : x));
+      if(vP && vP.id === paymentData.id) setVP({ ...paymentData, status: 'unpaid' });
+      toast('결제 상태가 취소로 변경되었습니다.');
+      return;
+    }
+    
+    if (!window.IMP) return toast('결제 모듈(PortOne)을 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+    const IMP = window.IMP;
+    IMP.init('imp13401584'); // 테스트용 식별코드
+    
+    IMP.request_pay({
+      pg: "html5_inicis",
+      pay_method: "card",
+      merchant_uid: paymentData.id + "_" + new Date().getTime(),
+      name: (paymentData.supplierName || suppliers.find(s=>s.id===paymentData.supplierId)?.name || '거래처') + " 대금 정산",
+      amount: paymentData.amount || 100,
+      buyer_email: "test@wellshare.com",
+      buyer_name: "웰쉐어 영양플러스",
+      buyer_tel: "010-1234-5678",
+    }, (rsp) => {
+      if (rsp.success) {
+        toast('결제가 성공적으로 승인 및 처리되었습니다!');
+        setPayments(payments.map(x => x.id === paymentData.id ? { ...x, status: 'paid' } : x));
+        if(vP && vP.id === paymentData.id) setVP({ ...paymentData, status: 'paid' });
+      } else {
+        toast(`결제 처리 취소 및 실패: ${rsp.error_msg}`);
+      }
+    });
+  };
+
   const handlePrint = () => { let h = `<table border="1"><thead><tr><th colspan="4" style="font-size:16pt; background:#d9e1f2; padding:10px;">${globalMonth}월 대금 정산 내역</th></tr><tr><th>입고일</th><th>거래처</th><th>청구금액</th><th>상태</th></tr></thead><tbody>`; fd.forEach(p => { h += `<tr><td>${p.date}</td><td style="text-align:left;">${p.supplierName}</td><td style="text-align:right; font-weight:bold;">${Utils.fmt(p.amount)}</td><td style="color:${p.status==='paid'?'green':'red'}; font-weight:bold;">${p.status==='paid'?'결제완료':'미결제'}</td></tr>`; }); h += `</tbody></table>`; Utils.printContent(`${globalMonth}월 대금정산내역`, h); };
   const handleExcel = () => { const data = fd.map(p => ({ date: p.date, supplierName: p.supplierName, amount: p.amount, status: p.status==='paid'?'결제완료':'미결제' })); const fields = [{key:'date', label:'입고일'}, {key:'supplierName', label:'거래처'}, {key:'amount', label:'청구금액', type:'number'}, {key:'status', label:'상태'}]; Utils.dlStyled(fields, data, `대금정산내역_${globalMonth}`); };
   const handleDeleteSelected = () => { if(!isLog) return toast('로그인 필요'); if(!window.confirm(`선택한 대금정산 내역 ${sel.length}건을 삭제하시겠습니까?`)) return; setPayments(payments.filter(p => !sel.includes(p.id))); setSel([]); toast('선택한 결제 내역이 삭제되었습니다.'); };
@@ -899,14 +972,14 @@ const PaymentView = ({ payments=[], setPayments, suppliers=[], purchaseRequests=
           <button onClick={handlePrint} className="px-4 py-2 bg-gray-800 text-white rounded-xl text-xs font-black hover:bg-gray-900 transition-colors flex items-center gap-1"><Ic.Print size={16}/> 인쇄 미리보기</button>
        </div>
     </div>
-      <div className="bg-white p-6 rounded-3xl border shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden"><div className="w-full border rounded-2xl flex-1 overflow-y-auto scrollbar-hide"><table className="w-full text-[10px] text-center table-fixed"><thead className="bg-gray-100 sticky top-0 shadow-sm border-b z-10"><tr>{isLog&&<th className="p-3 w-10 break-keep"><input type="checkbox" onChange={e=>setSel(e.target.checked?fd.map(i=>i.id):[])} checked={fd.length>0&&sel.length===fd.length}/></th>}<th className="p-3 w-[15%] break-keep">입고일</th><th className="p-3 text-left w-[40%] break-keep">거래처</th><th className="p-3 text-right w-[15%] break-keep">청구금액</th><th className="p-3 w-[10%] break-keep">상태</th>{isLog&&<th className="p-3 w-[10%] break-keep">처리</th>}</tr></thead><tbody>{fd.length===0?<tr><td colSpan={isLog?"6":"5"} className="p-20 font-bold text-gray-400">결제 내역 없음</td></tr>:fd.map(p=><tr key={p.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={()=>setVP(p)}>{isLog&&<td className="p-3" onClick={e=>e.stopPropagation()}><input type="checkbox" checked={sel.includes(p.id)} onChange={e=>{e.stopPropagation();setSel(prev=>e.target.checked?[...prev,p.id]:prev.filter(id=>id!==p.id));}}/></td>}<td className="p-3 font-bold text-gray-500 break-keep">{p.date}</td><td className="p-3 font-black text-left break-words">{p.supplierName || suppliers.find(x=>x.id===p.supplierId)?.name}</td><td className="p-3 font-black text-right break-keep">{Utils.fmt(p.amount)}</td><td className="p-3 break-keep"><span className={`px-2 py-1 rounded text-[10px] font-black ${p.status==='paid'?'bg-green-100 text-green-700':'bg-red-100 text-red-600'}`}>{p.status==='paid'?'결제완료':'미결제'}</span></td>{isLog&&<td className="p-3 break-keep"><button onClick={(e)=>{e.stopPropagation(); setPayments(payments.map(x=>x.id===p.id?{...x,status:x.status==='paid'?'unpaid':'paid'}:x)); toast('변경됨');}} className="border px-3 py-1 rounded text-[10px] font-black bg-white hover:bg-gray-50 transition-colors">{p.status==='paid'?'취소':'결제하기'}</button></td>}</tr>)}</tbody></table></div></div>
+      <div className="bg-white p-6 rounded-3xl border shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden"><div className="w-full border rounded-2xl flex-1 overflow-y-auto scrollbar-hide"><table className="w-full text-[10px] text-center table-fixed"><thead className="bg-gray-100 sticky top-0 shadow-sm border-b z-10"><tr>{isLog&&<th className="p-3 w-10 break-keep"><input type="checkbox" onChange={e=>setSel(e.target.checked?fd.map(i=>i.id):[])} checked={fd.length>0&&sel.length===fd.length}/></th>}<th className="p-3 w-[15%] break-keep">입고일</th><th className="p-3 text-left w-[40%] break-keep">거래처</th><th className="p-3 text-right w-[15%] break-keep">청구금액</th><th className="p-3 w-[10%] break-keep">상태</th>{isLog&&<th className="p-3 w-[10%] break-keep">처리</th>}</tr></thead><tbody>{fd.length===0?<tr><td colSpan={isLog?"6":"5"} className="p-20 font-bold text-gray-400">결제 내역 없음</td></tr>:fd.map(p=><tr key={p.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={()=>setVP(p)}>{isLog&&<td className="p-3" onClick={e=>e.stopPropagation()}><input type="checkbox" checked={sel.includes(p.id)} onChange={e=>{e.stopPropagation();setSel(prev=>e.target.checked?[...prev,p.id]:prev.filter(id=>id!==p.id));}}/></td>}<td className="p-3 font-bold text-gray-500 break-keep">{p.date}</td><td className="p-3 font-black text-left break-words">{p.supplierName || suppliers.find(x=>x.id===p.supplierId)?.name}</td><td className="p-3 font-black text-right break-keep">{Utils.fmt(p.amount)}</td><td className="p-3 break-keep"><span className={`px-2 py-1 rounded text-[10px] font-black ${p.status==='paid'?'bg-green-100 text-green-700':'bg-red-100 text-red-600'}`}>{p.status==='paid'?'결제완료':'미결제'}</span></td>{isLog&&<td className="p-3 break-keep"><button onClick={(e)=>{e.stopPropagation(); handlePayment(p);}} className="border px-3 py-1 rounded text-[10px] font-black bg-white hover:bg-gray-50 transition-colors">{p.status==='paid'?'취소':'PG결제'}</button></td>}</tr>)}</tbody></table></div></div>
       
       {vP && (
         <div className="absolute inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex justify-center items-center p-4 sm:p-6 animate-fade-in notranslate" translate="no">
           <div className="bg-white flex flex-col w-full max-w-4xl mx-auto rounded-[2.5rem] shadow-[0_0_40px_rgba(0,0,0,0.1)] border border-slate-200 animate-scale-up h-[90vh]">
             <div className="flex-none px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-white rounded-t-[2.5rem] pr-16"><h3 className="text-xl sm:text-2xl font-black text-slate-800 flex items-center gap-3"><Ic.Card size={28} className="text-purple-600"/> {vP.supplierName || suppliers.find(s=>s.id===vP.supplierId)?.name} 거래 상세 (청구금액: <span className="text-rose-500 ml-2">{Utils.fmt(vP.amount)}원</span>)</h3><button onClick={()=>setVP(null)} className="absolute top-6 right-6 p-2 bg-slate-100 rounded-full hover:text-rose-600 transition-colors"><Ic.X size={20}/></button></div>
             <div className="flex-1 p-4 sm:p-6 bg-slate-50 flex flex-col min-h-0"><div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden"><div className="overflow-y-auto flex-1 w-full scrollbar-hide"><table className="w-full text-[10px] text-center table-fixed"><thead className="bg-slate-100 sticky top-0 shadow-sm border-b z-10"><tr><th className="p-3 border-r w-[45%] break-keep">품명</th><th className="p-3 bg-blue-50 text-blue-800 border-r w-[20%] break-keep">입고수량</th><th className="p-3 border-r w-[15%] break-keep">단가</th><th className="p-3 text-amber-600 w-[20%] break-keep">청구금액</th></tr></thead><tbody>{(purchaseRequests.find(r=>r.id===vP.prId)?.items||[]).map((it, idx) => (<tr key={`pay-det-${it.itemId}-${idx}`} className="border-b hover:bg-gray-50"><td className="p-3 font-black text-left border-r break-words">{it.name}</td><td className="p-3 font-black text-blue-700 bg-blue-50/20 text-lg border-r break-keep">{Utils.fmt(it.reqBoxes)}</td><td className="p-3 font-bold text-gray-600 border-r break-keep">{Utils.fmt(it.unitPrice)}</td><td className="p-3 font-black text-amber-600 break-keep">{Utils.fmt(it.reqBoxes * it.unitPrice)}</td></tr>))}</tbody></table></div></div></div>
-            <div className="flex-none px-8 py-5 border-t border-slate-100 bg-white flex justify-end rounded-b-[2.5rem]"><button onClick={()=>{setPayments(payments.map(x=>x.id===vP.id?{...x,status:vP.status==='paid'?'unpaid':'paid'}:x)); setVP({...vP, status:vP.status==='paid'?'unpaid':'paid'}); toast('상태 변경됨');}} className={`px-12 py-4 rounded-xl font-black shadow-md text-base text-white transition-transform hover:-translate-y-0.5 ${vP.status==='paid'?'bg-gray-800 hover:bg-gray-900':'bg-purple-600 hover:bg-purple-700'}`}>{vP.status==='paid'?'결제 상태 취소로 변경':'대금 결제 승인 완료'}</button></div>
+            <div className="flex-none px-8 py-5 border-t border-slate-100 bg-white flex justify-end rounded-b-[2.5rem]"><button onClick={()=>handlePayment(vP)} className={`px-12 py-4 rounded-xl font-black shadow-md text-base text-white transition-transform hover:-translate-y-0.5 ${vP.status==='paid'?'bg-gray-800 hover:bg-gray-900':'bg-purple-600 hover:bg-purple-700'}`}>{vP.status==='paid'?'결제 상태 취소로 변경':'PG사 결제 모듈 호출 (대금 승인)'}</button></div>
           </div>
         </div>
       )}
@@ -914,12 +987,278 @@ const PaymentView = ({ payments=[], setPayments, suppliers=[], purchaseRequests=
   )
 };
 
-const DeliveryRoutingView = () => <div className="py-20 text-center text-gray-400 font-black"><Ic.Route size={48} className="mx-auto mb-4 opacity-50"/>AI 배송 라우팅 연동 준비중</div>;
+const SystemCheckView = () => {
+  const [logs, setLogs] = useState([]);
+  const [isChecking, setIsChecking] = useState(false);
+
+  const addLog = (msg, type='info') => setLogs(p => [...p, { time: new Date().toLocaleTimeString(), msg, type }]);
+
+  const runTest = async () => {
+    setIsChecking(true);
+    setLogs([]);
+    addLog('시스템 점검 모듈(Module 9)을 시작합니다.', 'info');
+    
+    try {
+      addLog('Firebase 연동 모듈을 불러오는 중...', 'info');
+      const { db, collection, doc, setDoc, getDoc } = await import('./firebaseConfig.js');
+      addLog('데이터베이스(Firestore) 연결 객체 획득 성공', 'success');
+      
+      const pingDoc = doc(collection(db, 'system_status'), 'ping');
+      addLog('system_status/ping 쓰기(Write) 테스트 중...', 'info');
+      
+      const testData = { last_ping: new Date().toISOString(), status: 'OK' };
+      await setDoc(pingDoc, testData);
+      addLog('Write 테스트 통과 (데이터 적재 완료)', 'success');
+      
+      addLog('system_status/ping 읽기(Read) 테스트 중...', 'info');
+      const docSnap = await getDoc(pingDoc);
+      if(docSnap.exists() && docSnap.data().status === 'OK') {
+        addLog(`Read 테스트 통과 (반환 시간: ${docSnap.data().last_ping})`, 'success');
+      } else {
+        throw new Error('데이터 검증 실패');
+      }
+      
+      addLog('Module 9: 데이터베이스 실시간 연동 점검 완료. 정상 작동 확인되었습니다.', 'success');
+    } catch (e) {
+      addLog(`점검 중 오류 발생: ${e.message}`, 'error');
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6 w-full animate-fade-in flex flex-col h-full min-h-0">
+      <div className="flex justify-between items-end mb-2 flex-none">
+        <div><h2 className="text-2xl font-bold">시스템 연동 점검 (Module 9)</h2><p className="text-[11px] text-gray-500 mt-1">Firebase Firestore 데이터베이스와의 통신 상태를 실시간으로 확인합니다.</p></div>
+        <button onClick={runTest} disabled={isChecking} className={`px-6 py-3 rounded-xl font-black text-sm text-white shadow-md transition-all ${isChecking ? 'bg-slate-400' : 'bg-emerald-600 hover:bg-emerald-700 active:scale-95'}`}>{isChecking ? '점검 진행 중...' : '데이터베이스 핑(Ping) 테스트 시작'}</button>
+      </div>
+      <div className="bg-slate-900 p-6 rounded-3xl shadow-inner flex-1 overflow-y-auto font-mono text-sm border-4 border-slate-800">
+        {logs.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-slate-600 font-bold">우측 상단의 버튼을 눌러 점검을 시작하세요.</div>
+        ) : (
+          logs.map((l, i) => (
+            <div key={i} className={`mb-3 flex gap-3 ${l.type==='error'?'text-rose-400':l.type==='success'?'text-emerald-400':'text-blue-300'}`}>
+              <span className="text-slate-500 shrink-0">[{l.time}]</span> 
+              <span>{l.type==='success' && '✅ '}{l.type==='error' && '❌ '}{l.msg}</span>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
+
+const ContractsManagementView = ({ clients=[], suppliers=[], contracts=[], setContracts, isLog, toast, setConfirm, globalMonth }) => {
+  const [mo, setMo] = useState(false), [newC, setNewC] = useState({ targetId: '', type: 'client', title: '', content: '' });
+  const [sig, setSig] = useState(false); let canvasRef = React.useRef(null), isDrawing = false;
+  const startD = (e) => { isDrawing = true; const c = canvasRef.current; if(!c) return; const ctx = c.getContext('2d'); ctx.beginPath(); ctx.moveTo(e.nativeEvent.offsetX, e.nativeEvent.offsetY); };
+  const draw = (e) => { if (!isDrawing) return; const c = canvasRef.current; if(!c) return; const ctx = c.getContext('2d'); ctx.lineTo(e.nativeEvent.offsetX, e.nativeEvent.offsetY); ctx.stroke(); };
+  const endD = () => { isDrawing = false; };
+  const saveContract = () => { if(!isLog) return toast('로그인 필요'); if(!newC.targetId || !newC.title) return toast('필수값 누락'); const canvas = canvasRef.current; const signData = canvas ? canvas.toDataURL() : ''; setContracts([{ id: `CT_${Date.now()}`, ...newC, signData, date: new Date().toISOString().split('T')[0] }, ...contracts]); toast('계약서 저장 완료'); setMo(false); };
+  return (
+    <div className="space-y-6 w-full animate-fade-in flex flex-col h-full min-h-0">
+      <div className="flex justify-between items-end flex-none"><div><h2 className="text-2xl font-bold">계약 및 전자서명 관리</h2><p className="text-[11px] text-gray-500 mt-1">보건소 및 거래처와의 계약서를 전자 서명과 함께 안전하게 보관합니다.</p></div><button onClick={()=>setMo(true)} className="bg-gradient-to-r from-[#29B4E3] to-[#E94287] text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-md hover:shadow-lg hover:scale-105 transition-all">새 계약서 작성</button></div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-y-auto pr-2">
+         {contracts.length===0 ? <div className="col-span-full py-20 text-center text-gray-400 font-bold bg-white rounded-3xl border">등록된 전자계약서가 없습니다.</div> : contracts.map(c => (
+           <div key={c.id} className="bg-white p-5 rounded-[2rem] shadow-md border border-slate-200 hover:shadow-xl transition-all duration-300 group hover:-translate-y-1">
+             <div className="flex justify-between mb-3"><span className={`px-2 py-1 rounded-lg text-[10px] font-black ${c.type==='client'?'bg-blue-50 text-blue-600 border border-blue-200':'bg-green-50 text-green-600 border border-green-200'}`}>{c.type==='client'?'보건소 납품계약':'매입 거래처계약'}</span><span className="text-xs font-bold text-gray-400">{c.date}</span></div>
+             <h3 className="font-black text-lg mb-1 text-slate-800">{c.title}</h3>
+             <p className="text-xs text-gray-500 font-bold mb-4">{c.type==='client' ? clients.find(x=>x.id===c.targetId)?.name : suppliers.find(x=>x.id===c.targetId)?.name}</p>
+             {c.signData && <div className="bg-slate-50 border rounded-xl p-2 h-20 flex justify-center items-center shadow-inner"><img src={c.signData} alt="서명" className="max-h-full opacity-80" /></div>}
+             <button onClick={()=>setConfirm({is:true, msg:'정말 이 계약을 파기/삭제하시겠습니까?', onC:()=>{setContracts(contracts.filter(x=>x.id!==c.id)); setConfirm({is:false}); toast('삭제됨');}, onX:()=>setConfirm({is:false})})} className="mt-4 w-full py-2.5 text-xs font-black text-red-500 hover:bg-red-50 rounded-xl transition-colors">계약 파기</button>
+           </div>
+         ))}
+      </div>
+      {mo && (
+        <div className="absolute inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex justify-center items-center p-4">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] border border-slate-200 animate-scale-up">
+            <div className="p-6 border-b flex justify-between items-center bg-white rounded-t-[2.5rem]"><h3 className="text-xl font-black text-slate-800 flex items-center gap-2"><Ic.FileD size={24} className="text-[#8b2f97]"/> 새 전자계약서 작성</h3><button onClick={()=>setMo(false)} className="p-2 bg-slate-100 rounded-full hover:text-rose-500"><Ic.X size={18}/></button></div>
+            <div className="p-6 overflow-y-auto space-y-4 bg-slate-50">
+               <div><label className="text-xs font-black text-gray-500">계약 대상 타입</label><select value={newC.type} onChange={e=>setNewC({...newC, type: e.target.value, targetId:''})} className="w-full mt-1 border border-slate-200 p-3.5 rounded-xl bg-white shadow-sm font-black outline-none focus:border-blue-500"><option value="client">보건소 (납품처)</option><option value="supplier">매입 거래처</option></select></div>
+               <div><label className="text-xs font-black text-gray-500">계약 대상</label><select value={newC.targetId} onChange={e=>setNewC({...newC, targetId: e.target.value})} className="w-full mt-1 border border-slate-200 p-3.5 rounded-xl bg-white shadow-sm font-black outline-none focus:border-blue-500"><option value="">대상을 선택하세요</option>{(newC.type==='client'?clients:suppliers).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></div>
+               <div><label className="text-xs font-black text-gray-500">계약명</label><input type="text" value={newC.title} onChange={e=>setNewC({...newC, title: e.target.value})} className="w-full mt-1 border border-slate-200 p-3.5 rounded-xl bg-white shadow-sm font-black outline-none focus:border-blue-500" placeholder="예: 2026년 영양플러스 단가계약서" /></div>
+               <div><div className="flex justify-between items-end"><label className="text-xs font-black text-gray-500">전자 서명 (마우스/터치)</label><button onClick={()=>{const c=canvasRef.current; if(c) c.getContext('2d').clearRect(0,0,c.width,c.height);}} className="text-[10px] text-rose-500 bg-rose-50 px-2 py-1 rounded font-bold">지우기</button></div><div className="border-2 border-dashed border-slate-300 rounded-2xl bg-white h-32 mt-2 relative overflow-hidden cursor-crosshair shadow-inner"><canvas ref={canvasRef} width={450} height={128} onMouseDown={startD} onMouseMove={draw} onMouseUp={endD} onMouseOut={endD} onTouchStart={e=>{e.preventDefault(); const t=e.touches[0]; const rect=e.target.getBoundingClientRect(); startD({nativeEvent:{offsetX:t.clientX-rect.left, offsetY:t.clientY-rect.top}});}} onTouchMove={e=>{e.preventDefault(); const t=e.touches[0]; const rect=e.target.getBoundingClientRect(); draw({nativeEvent:{offsetX:t.clientX-rect.left, offsetY:t.clientY-rect.top}});}} onTouchEnd={endD} className="w-full h-full"></canvas></div></div>
+            </div>
+            <div className="p-6 border-t bg-white rounded-b-[2.5rem]"><button onClick={saveContract} className="w-full bg-gradient-to-r from-[#8b2f97] to-[#E94287] text-white py-4 rounded-xl font-black text-base shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5">계약 확정 및 서명 저장</button></div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const PriceMappingView = ({ clients=[], items=[], priceMappings=[], setPriceMappings, toast }) => {
+  const [selC, setSelC] = useState('');
+  const cMap = priceMappings.find(m => m.clientId === selC) || { clientId: selC, mappings: {} };
+  const [localMap, setLocalMap] = useState({});
+
+  useEffect(() => { setLocalMap(cMap.mappings || {}); }, [selC, priceMappings, cMap.mappings]);
+
+  const save = () => {
+    const nw = priceMappings.filter(m => m.clientId !== selC);
+    nw.push({ clientId: selC, mappings: localMap });
+    setPriceMappings(nw);
+    toast('단가 매칭이 안전하게 저장되었습니다.');
+  };
+
+  return (
+    <div className="space-y-6 w-full animate-fade-in flex flex-col h-full min-h-0">
+      <div className="flex justify-between items-end flex-none"><div><h2 className="text-2xl font-bold">보건소별 단가 매칭</h2><p className="text-[11px] text-gray-500 mt-1">보건소별로 다르게 책정된 개별 품목 계약 단가를 설정합니다.</p></div>{selC && <button onClick={save} className="bg-gradient-to-r from-[#8b2f97] to-[#E94287] text-white px-6 py-3 rounded-xl text-xs font-black shadow-lg hover:shadow-xl hover:scale-105 transition-all">단가 저장</button>}</div>
+      <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 flex-none flex items-center gap-4"><label className="text-sm font-black text-slate-500 whitespace-nowrap">대상 보건소 선택 :</label><select value={selC} onChange={e=>setSelC(e.target.value)} className="flex-1 md:w-1/2 border-2 border-slate-100 p-3 rounded-xl bg-slate-50 font-black outline-none focus:border-[#E94287] transition-colors"><option value="">보건소를 선택하세요</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+      {selC ? (
+        <div className="bg-white rounded-[2rem] shadow-md border border-slate-200 flex-1 overflow-hidden flex flex-col">
+           <div className="overflow-y-auto flex-1 p-0">
+             <table className="w-full text-left border-collapse"><thead className="bg-slate-50 sticky top-0 shadow-sm z-10"><tr><th className="p-4 text-[11px] font-black text-slate-500 border-b w-1/3">품목명</th><th className="p-4 text-[11px] font-black text-slate-500 border-b w-1/3 text-right">기본 단가</th><th className="p-4 text-[12px] font-black text-[#E94287] border-b bg-pink-50 text-right w-1/3 shadow-inner">보건소 계약 단가 (원)</th></tr></thead><tbody>{items.map(it=><tr key={it.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors"><td className="p-4 text-xs font-bold text-slate-700 flex flex-col gap-1"><span className="text-slate-800">{it.name}</span><span className="text-[10px] text-gray-400">단위: {it.unit} / 박스입수: {it.boxQuantity}</span></td><td className="p-4 text-xs font-black text-slate-400 text-right pr-6">{Utils.fmt(it.unitPrice)} 원</td><td className="p-3 bg-pink-50/20"><NumInp v={localMap[it.id]!==undefined?localMap[it.id]:''} setV={v=>setLocalMap({...localMap, [it.id]:v})} ph={String(it.unitPrice||0)} cls="w-full border-2 border-pink-100 p-3 rounded-xl text-right focus:border-[#E94287] focus:bg-white bg-pink-50/30 transition-all font-black text-[#E94287]" /></td></tr>)}</tbody></table>
+           </div>
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col items-center justify-center bg-white/50 rounded-[2rem] border-2 border-dashed border-slate-200"><Ic.Bldg size={64} className="text-slate-200 mb-4" /><p className="text-sm font-black text-slate-400">보건소를 선택하면 품목별 단가를 매칭할 수 있습니다.</p></div>
+      )}
+    </div>
+  );
+};
+
+
+const RosterManagementView = ({ type='1차', clients=[], rosters=[], setRosters, globalMonth, toast }) => {
+  const [selC, setSelC] = useState('');
+  const rosterData = rosters.find(r => r.clientId === selC && r.month === globalMonth && r.type === type) || { members: [] };
+  const [members, setMembers] = useState(rosterData.members);
+
+  useEffect(() => {
+    const rd = rosters.find(r => r.clientId === selC && r.month === globalMonth && r.type === type);
+    setMembers(rd ? rd.members : []);
+  }, [selC, globalMonth, type, rosters]);
+
+  const save = () => {
+    if(!selC) return;
+    const nx = rosters.filter(r => !(r.clientId === selC && r.month === globalMonth && r.type === type));
+    nx.push({ clientId: selC, month: globalMonth, type, members });
+    setRosters(nx);
+    toast(`${type} 명단이 저장되었습니다.`);
+  };
+
+  const handlePaste = (e) => {
+    const rs = Utils.parseClip(e); if(!rs.length) return;
+    const newMembers = [...members];
+    rs.forEach(r => {
+      if (r.length >= 2) {
+        newMembers.push({ id: `M_${Date.now()}_${Math.random()}`, name: r[0]?.text||'', contact: r[1]?.text||'', address: r[2]?.text||'', packageType: r[3]?.text||'', note: r[4]?.text||'' });
+      }
+    });
+    setMembers(newMembers);
+    toast(`${rs.length}명의 명단이 붙여넣기 되었습니다.`);
+  };
+
+  return (
+    <div className="space-y-6 w-full animate-fade-in flex flex-col h-full min-h-0">
+      <div className="flex justify-between items-end flex-none">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">{type} 배송 명단 관리</h2>
+          <p className="text-[11px] text-gray-500 mt-1">보건소에서 전달받은 엑셀 명단을 복사하여 아래에 붙여넣기 하세요.</p>
+        </div>
+        {selC && <button onClick={save} className="bg-gradient-to-r from-[#8b2f97] to-[#E94287] text-white px-6 py-3 rounded-xl text-xs font-black shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all">명단 저장</button>}
+      </div>
+
+      <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 flex-none flex items-center gap-4">
+        <label className="text-sm font-black text-slate-500 whitespace-nowrap">대상 보건소 선택 :</label>
+        <select value={selC} onChange={e=>setSelC(e.target.value)} className="flex-1 md:w-1/2 border-2 border-slate-100 p-3 rounded-xl bg-slate-50 font-black outline-none focus:border-[#E94287] transition-colors">
+          <option value="">보건소를 선택하세요</option>
+          {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <div className="bg-slate-100 text-slate-500 font-bold px-4 py-3 rounded-xl border border-slate-200 text-sm">
+          현재 기준월 : <span className="text-[#E94287] font-black">{globalMonth}</span>
+        </div>
+      </div>
+
+      {selC ? (
+        <div className="bg-white rounded-[2rem] shadow-md border border-slate-200 flex-1 flex flex-col overflow-hidden group focus-within:ring-2 focus-within:ring-[#E94287]/30 transition-all">
+           <div className="p-4 bg-pink-50 border-b border-pink-100 flex justify-between items-center">
+             <div className="text-xs font-bold text-[#E94287]">💡 엑셀에서 명단(이름, 연락처, 주소, 패키지, 비고)을 복사한 후 이 화면 아무 곳에서나 <kbd className="bg-white px-2 py-0.5 border border-pink-200 rounded text-slate-600 shadow-sm mx-1">Ctrl + V</kbd> 를 누르세요.</div>
+             <span className="text-sm font-black text-slate-700 bg-white px-3 py-1 rounded-full shadow-sm border border-pink-100">총 {members.length}명</span>
+           </div>
+           <div className="flex-1 overflow-y-auto outline-none p-0 bg-slate-50/30" tabIndex={0} onPaste={handlePaste}>
+             {members.length === 0 ? (
+               <div className="h-full flex flex-col items-center justify-center bg-transparent min-h-[300px]">
+                 <Ic.Users size={64} className="text-slate-200 mb-4" />
+                 <p className="text-sm font-black text-slate-400">여기에 명단을 붙여넣기 하세요.</p>
+                 <p className="text-[10px] text-slate-300 mt-2">이름 | 연락처 | 주소 | 패키지유형 | 비고</p>
+               </div>
+             ) : (
+               <table className="w-full text-left border-collapse">
+                 <thead className="bg-slate-50 sticky top-0 shadow-sm z-10">
+                   <tr>
+                     <th className="p-4 text-[11px] font-black text-slate-500 border-b w-[50px] text-center">No.</th>
+                     <th className="p-4 text-[11px] font-black text-slate-500 border-b w-[100px]">이름</th>
+                     <th className="p-4 text-[11px] font-black text-slate-500 border-b w-[150px]">연락처</th>
+                     <th className="p-4 text-[11px] font-black text-slate-500 border-b">주소 (배송지)</th>
+                     <th className="p-4 text-[11px] font-black text-slate-500 border-b w-[120px]">패키지 유형</th>
+                     <th className="p-4 text-[11px] font-black text-slate-500 border-b w-[100px]">비고</th>
+                     <th className="p-4 text-[11px] font-black text-slate-500 border-b w-[60px] text-center">삭제</th>
+                   </tr>
+                 </thead>
+                 <tbody>
+                   {members.map((m, idx) => (
+                     <tr key={m.id} className="border-b border-slate-100 hover:bg-white transition-colors bg-white/50">
+                       <td className="p-3 text-[10px] font-bold text-slate-400 text-center">{idx + 1}</td>
+                       <td className="p-3"><input type="text" value={m.name} onChange={e=>{const nm=[...members]; nm[idx].name=e.target.value; setMembers(nm);}} className="w-full bg-transparent outline-none font-bold text-slate-700 focus:border-b-2 focus:border-[#E94287]" placeholder="이름" /></td>
+                       <td className="p-3"><input type="text" value={m.contact} onChange={e=>{const nm=[...members]; nm[idx].contact=e.target.value; setMembers(nm);}} className="w-full bg-transparent outline-none font-bold text-slate-600 focus:border-b-2 focus:border-[#E94287]" placeholder="연락처" /></td>
+                       <td className="p-3"><input type="text" value={m.address} onChange={e=>{const nm=[...members]; nm[idx].address=e.target.value; setMembers(nm);}} className="w-full bg-transparent outline-none text-xs text-slate-600 focus:border-b-2 focus:border-[#E94287]" placeholder="주소" /></td>
+                       <td className="p-3"><input type="text" value={m.packageType} onChange={e=>{const nm=[...members]; nm[idx].packageType=e.target.value; setMembers(nm);}} className="w-full bg-transparent outline-none text-xs text-[#8b2f97] font-bold bg-purple-50 focus:bg-white rounded px-2 py-1 focus:border-b-2 focus:border-[#E94287]" placeholder="패키지" /></td>
+                       <td className="p-3"><input type="text" value={m.note} onChange={e=>{const nm=[...members]; nm[idx].note=e.target.value; setMembers(nm);}} className="w-full bg-transparent outline-none text-xs text-slate-400 focus:border-b-2 focus:border-[#E94287]" placeholder="비고" /></td>
+                       <td className="p-3 text-center"><button onClick={()=>{const nm=[...members]; nm.splice(idx,1); setMembers(nm);}} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Ic.X size={16}/></button></td>
+                     </tr>
+                   ))}
+                 </tbody>
+               </table>
+             )}
+           </div>
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col items-center justify-center bg-white/50 rounded-[2rem] border-2 border-dashed border-slate-200">
+          <Ic.Bldg size={64} className="text-slate-200 mb-4" />
+          <p className="text-sm font-black text-slate-400">보건소를 선택하면 명단을 업로드할 수 있습니다.</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const PowderDataView = ({ globalMonth }) => (
+  <div className="space-y-6 w-full animate-fade-in flex flex-col h-full min-h-0 bg-[#f0f2f5] -m-6 p-6 lg:-m-8 lg:p-8">
+    <div className="flex justify-between items-center bg-white p-5 rounded-3xl shadow-sm border border-slate-200">
+      <h2 className="text-2xl font-black text-[#8b2f97] flex items-center gap-3"><Ic.ListP size={28}/> 분유 데이터 연동 센터</h2>
+      <span className="text-sm font-black bg-purple-50 text-purple-700 border border-purple-200 px-4 py-2 rounded-xl">{globalMonth} 기준</span>
+    </div>
+    <div className="flex-1 overflow-y-auto scrollbar-hide pb-10">
+       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+         <div className="bg-white rounded-3xl p-6 shadow-sm border-t-4 border-[#E94287]">
+           <p className="text-sm font-bold text-slate-500 mb-1">당월 조제분유 총량</p>
+           <p className="text-3xl font-black text-slate-800">1,240 <span className="text-lg text-slate-400">캔</span></p>
+         </div>
+         <div className="bg-white rounded-3xl p-6 shadow-sm border-t-4 border-[#29B4E3]">
+           <p className="text-sm font-bold text-slate-500 mb-1">당월 성장기용 조제식</p>
+           <p className="text-3xl font-black text-slate-800">850 <span className="text-lg text-slate-400">캔</span></p>
+         </div>
+         <div className="bg-white rounded-3xl p-6 shadow-sm border-t-4 border-[#8b2f97]">
+           <p className="text-sm font-bold text-slate-500 mb-1">특수분유 연동</p>
+           <p className="text-3xl font-black text-slate-800">12 <span className="text-lg text-slate-400">캔</span></p>
+         </div>
+       </div>
+       <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-8 text-center min-h-[300px] flex flex-col justify-center items-center">
+          <div className="w-20 h-20 bg-purple-50 text-purple-300 rounded-full flex items-center justify-center mb-6 animate-pulse"><Ic.Dash size={40}/></div>
+          <h3 className="text-xl font-black text-slate-700 mb-2">데이터 자동 집계중입니다.</h3>
+          <p className="text-sm font-bold text-slate-400 max-w-md">외부 분유업체(남양, 매일 등) 시스템의 발주 내역 API를 연동하여 실시간으로 조제분유 발주량과 재고를 추적하는 모듈이 준비되고 있습니다.</p>
+       </div>
+    </div>
+  </div>
+);
+
 const InventoryView = () => <div className="py-20 text-center text-gray-400 font-black"><Ic.Cart size={48} className="mx-auto mb-4 opacity-50"/>WMS 재고 연동 시스템 준비중</div>;
 
 function MainApp() {
   const [ac, setAc] = useState('dashboard'), [cUser, setCUser] = useState(null), [st, setSt] = useState(INITIAL_APP_STATE);
   const [tt, setTt] = useState(null), [cfm, setConfirm] = useState({is:false,msg:'',onC:null,onX:null}), [lm, setLm] = useState(false);
+  const [openMenuCats, setOpenMenuCats] = useState({'cat_basic':false, 'cat_contract':false, 'cat_schedule':false, 'cat_roster':true, 'cat_order':true, 'cat_work':true, 'cat_delivery':true});
   const [globalMonth, setGlobalMonth] = useState(new Date().toISOString().slice(0, 7));
   const [fbUser, setFbUser] = useState(null), [authInit, setAuthInit] = useState(false), [dbLd, setDbLd] = useState(false);
   const [loginForm, setLoginForm] = useState({ id: '', pwd: '', saveId: false, keepLog: false }), [sysErrors, setSysErrors] = useState([]), [loadTimeout, setLoadTimeout] = useState(false), [dbPermissionError, setDbPermissionError] = useState(false);
@@ -927,6 +1266,7 @@ function MainApp() {
   useEffect(() => { const interval = setInterval(() => { if (windowErrors.length > sysErrors.length) setSysErrors([...windowErrors]); }, 1000); return () => clearInterval(interval); }, [sysErrors]);
   useEffect(() => { const timer = setTimeout(() => { if (!dbLd) setLoadTimeout(true); }, 3000); return () => clearTimeout(timer); }, [dbLd]);
   useEffect(() => { const sId = localStorage.getItem('ws_saved_id'), kLog = localStorage.getItem('ws_keep_log') === 'true'; if (sId) { setLoginForm(prev => ({ ...prev, id: sId, saveId: true, keepLog: kLog })); } }, []);
+  useEffect(() => { if (!dbLd) return; if (!cUser && st.users && st.users.length > 0) { const token = localStorage.getItem('ws_session'); if (token) { try { const parts = atob(token).split(':'); const id = parts[0]; const pwd = parts.slice(1).join(':'); const u = st.users.find(x => x.id === id && x.password === pwd); if (u) setCUser(u); else localStorage.removeItem('ws_session'); } catch(e) { localStorage.removeItem('ws_session'); } } } }, [st.users, cUser, dbLd]);
 
   useEffect(() => {
     if (!auth) { setDbLd(true); return; }
@@ -958,18 +1298,20 @@ function MainApp() {
   const toast = m => { setTt({m}); setTimeout(()=>setTt(null), 3000); };
   const exp = () => { const b=new Blob([JSON.stringify(st,null,2)], {type:"application/json"}); const l=document.createElement('a'); l.href=URL.createObjectURL(b); l.download=`backup_${Date.now()}.json`; l.click(); toast('백업 완료'); };
   const imp = e => { const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=ev=>{try{const i=JSON.parse(ev.target.result); setConfirm({is:true, msg:'덮어씌웁니까?', onC:()=>{setSt(i); if(authInit&&fbUser&&db && !window.firebasePermissionDenied) setDoc(doc(db,'artifacts',appId,'public','data','erp_sync','main_state'),Utils.cleanData(i)); setConfirm({is:false}); toast('복원됨');}, onX:()=>setConfirm({is:false})});}catch(err){toast('파일 오류');}}; r.readAsText(f); e.target.value=null; };
+  const migrateToCloud = async () => { if(!window.confirm('현재 앱의 모든 데이터를 클라우드 영구 저장소(Firestore)로 완전히 마이그레이션 하시겠습니까?\n이후부터는 실시간 양방향 동기화가 활성화됩니다.')) return; try { const { db, doc, setDoc } = await import('./firebaseConfig.js'); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'erp_sync', 'main_state'), Utils.cleanData(st), { merge: true }); toast('✅ 클라우드 DB 영구저장 전환 완벽하게 완료되었습니다!'); } catch(e) { toast('❌ 클라우드 전환 실패: ' + e.message); } };
 
   const handleLoginSubmit = (e) => {
     e.preventDefault(); const u = (st.users||[]).find(x => x.id === loginForm.id && x.password === loginForm.pwd);
     if (u) {
        setCUser(u); setAc('dashboard'); setLm(false);
        if (loginForm.saveId) localStorage.setItem('ws_saved_id', loginForm.id); else localStorage.removeItem('ws_saved_id');
-       if (loginForm.keepLog) localStorage.setItem('ws_keep_log', 'true'); else localStorage.removeItem('ws_keep_log');
+       if (loginForm.keepLog) localStorage.setItem('ws_session', btoa(`${loginForm.id}:${loginForm.pwd}`)); else localStorage.removeItem('ws_session');
+       localStorage.setItem('ws_keep_log', loginForm.keepLog ? 'true' : 'false');
        toast('환영합니다!');
     } else toast('정보 불일치');
   };
 
-  const handleLogout = () => { if(window.confirm('시스템에서 안전하게 로그아웃 하시겠습니까?')) { setCUser(null); localStorage.removeItem('ws_saved_id'); localStorage.removeItem('ws_keep_log'); setAc('dashboard'); toast('안전하게 로그아웃 되었습니다.'); } };
+  const handleLogout = () => { if(window.confirm('시스템에서 안전하게 로그아웃 하시겠습니까?')) { setCUser(null); localStorage.removeItem('ws_session'); setAc('dashboard'); toast('안전하게 로그아웃 되었습니다.'); } };
 
   const cx = { isLog: !!cUser, toast, setConfirm, setAc, globalMonth };
   const categorySortOrder = st.categorySortOrder || [];
@@ -977,36 +1319,59 @@ function MainApp() {
   
   const menuItems = [
     {id:'dashboard', l:'대시보드', i:Ic.Dash, roles:['admin', 'office', 'logistics']},
-    {id:'users', l:'사용자', i:Ic.User, roles:['admin']},
-    {id:'items', l:'품목', i:Ic.Box, roles:['admin', 'office']},
-    {id:'suppliers', l:'거래처', i:Ic.Users, roles:['admin', 'office']},
-    {id:'clients', l:'보건소', i:Ic.Bldg, roles:['admin', 'office']},
-    {id:'schedule', l:'일정/달력', i:Ic.Cal, roles:['admin', 'office', 'logistics']},
+    {id:'clients', l:'보건소 관리', i:Ic.Bldg, roles:['admin', 'office']},
+    {id:'users', l:'사용자 관리', i:Ic.User, roles:['admin']},
+    {id:'items', l:'품목 관리', i:Ic.Box, roles:['admin', 'office']},
+    {id:'suppliers', l:'거래처 관리', i:Ic.Users, roles:['admin', 'office']},
+    {id:'contracts', l:'보건소별 계약', i:Ic.FileD, roles:['admin', 'office']},
+    {id:'priceMapping', l:'단가 매칭', i:Ic.File, roles:['admin', 'office']},
+    {id:'schedule', l:'작업/배송 일정', i:Ic.Cal, roles:['admin', 'office', 'logistics']},
+    {id:'roster1', l:'1차 명단등록', i:Ic.Users, roles:['admin', 'office']},
+    {id:'roster2', l:'2차 명단등록', i:Ic.Users, roles:['admin', 'office']},
     {id:'clientMapping', l:'품목매칭', i:Ic.ChkSq, roles:['admin', 'office']},
-    {id:'clientOrder', l:'발주입력', i:Ic.Clip, roles:['admin', 'office']},
-    {id:'orderSummary', l:'AI발주집계', i:Ic.ListP, roles:['admin', 'office']},
-    {id:'purchaseOrder', l:'구매요청서', i:Ic.File, roles:['admin', 'office']},
-    {id:'receipt', l:'물류입고', i:Ic.Down, roles:['admin', 'logistics']},
+    {id:'clientOrder', l:'발주등록', i:Ic.Clip, roles:['admin', 'office']},
+    {id:'purchaseOrder', l:'구매요청', i:Ic.File, roles:['admin', 'office']},
+    {id:'receipt', l:'입고확인', i:Ic.Down, roles:['admin', 'logistics']},
+    {id:'orderSummary', l:'AI집계(참고)', i:Ic.ListP, roles:['admin', 'office']},
+    {id:'workOrder', l:'소분지시서', i:Ic.ListP, roles:['admin', 'office']},
+    {id:'packagePrint', l:'패키지지시서', i:Ic.Print2, roles:['admin', 'office', 'logistics'], isExt: true, url: 'https://wssc-workorder.web.app/'},
+    {id:'powderData', l:'분유데이터', i:Ic.Dash, roles:['admin', 'office']},
+    {id:'deliveryBlock', l:'배송블럭/순번', i:Ic.ChkSq, roles:['admin', 'logistics']},
+    {id:'loadingOrder', l:'상차지시서', i:Ic.Truck, roles:['admin', 'office', 'logistics']},
+    {id:'deliveryStatus', l:'실시간 배송상태', i:Ic.ListO, roles:['admin', 'office', 'logistics']},
+    {id:'publicPortal', l:'수령확인증', i:Ic.File, roles:['admin', 'office']},
+    {id:'settlementList', l:'자동 정산/청구서', i:Ic.Card, roles:['admin', 'office']},
     {id:'payment', l:'대금정산', i:Ic.Card, roles:['admin', 'office']},
-    {id:'packagePrint', l:'영플패키지출력', i:Ic.Print2, roles:['admin', 'office', 'logistics'], isExt: true, url: 'https://wssc-workorder.web.app/'}
+    {id:'systemCheck', l:'DB연동/시스템점검', i:Ic.Serv, roles:['admin']}
   ];
 
   const rdr = () => {
     switch (ac) {
       case 'dashboard': return <DashboardView items={si} clients={st.clients} clientOrders={st.clientOrders} payments={st.payments} logs={st.systemLogs} onExport={exp} onImport={imp} sortOrder={categorySortOrder} setOrder={v=>updateSt('categorySortOrder',v)} {...cx} />;
-      case 'users': return <DataManagerView title="사용자" data={st.users} setData={v=>updateSt('users',v)} filename="사용자" fields={[{key:'id',label:'ID',inlineEditable:true},{key:'password',label:'PW',hideInList:true},{key:'name',label:'이름',inlineEditable:true},{key:'role',label:'권한',type:'select',inlineEditable:true,options:[{value:'admin',label:'최고관리자'},{value:'office',label:'사무/발주팀'},{value:'logistics',label:'물류/현장팀'}]},{key:'contact',label:'연락처',inlineEditable:true},{key:'note',label:'비고',inlineEditable:true}]} {...cx} />;
-      case 'items': return <DataManagerView title="마스터품목" data={si} setData={v=>updateSt('items',v)} filename="품목" fields={[{key:'category',label:'분류',inlineEditable:true},{key:'id',label:'코드',hideInList:true},{key:'name',label:'품명',inlineEditable:true},{key:'unit',label:'단위',inlineEditable:true},{key:'boxQuantity',label:'입수',type:'number',inlineEditable:true},{key:'unitPrice',label:'단가',type:'number',inlineEditable:true},{key:'supplierId',label:'거래처',type:'select',inlineEditable:true,options:(st.suppliers||[]).map(s=>({label:s.name,value:s.id}))}]} {...cx} />;
-      case 'suppliers': return <DataManagerView title="거래처" data={st.suppliers} setData={v=>updateSt('suppliers',v)} filename="거래처" fields={[{key:'id',label:'코드',hideInList:true},{key:'name',label:'거래처명',inlineEditable:true},{key:'manager',label:'담당자',inlineEditable:true},{key:'contact',label:'연락처',inlineEditable:true},{key:'note',label:'비고',inlineEditable:true}]} {...cx} />;
-      case 'clients': return <DataManagerView title="보건소" data={st.clients} setData={v=>updateSt('clients',v)} filename="보건소" fields={[{key:'id',label:'코드',hideInList:true},{key:'name',label:'기관명',inlineEditable:false},{key:'shortName',label:'호칭',inlineEditable:true},{key:'manager',label:'담당자',inlineEditable:true},{key:'contact',label:'연락처',inlineEditable:true},{key:'inspectLocation',label:'장소',inlineEditable:true}]} {...cx} />;
+      case 'roster1': return <RosterManagementView type="1차" clients={st.clients} rosters={st.rosters||[]} setRosters={v=>updateSt('rosters',v)} globalMonth={globalMonth} toast={toast} />;
+      case 'roster2': return <RosterManagementView type="2차" clients={st.clients} rosters={st.rosters||[]} setRosters={v=>updateSt('rosters',v)} globalMonth={globalMonth} toast={toast} />;
+      case 'priceMapping': return <PriceMappingView clients={st.clients} items={si} priceMappings={st.priceMappings||[]} setPriceMappings={v=>updateSt('priceMappings',v)} toast={toast} />;
+      case 'powderData': return <PowderDataView globalMonth={globalMonth} />;
+      case 'deliveryBlock': return <DeliveryBlockRoutingView clients={st.clients} clientOrders={st.clientOrders} setClientOrders={v=>updateSt('clientOrders',v)} globalMonth={globalMonth} toast={toast} />;
+      case 'deliveryStatus': return <DeliveryStatusView clients={st.clients} clientOrders={st.clientOrders} globalMonth={globalMonth} />;
+      case 'publicPortal': return <PublicPortalView clients={st.clients} clientOrders={st.clientOrders} {...cx} />;
+      case 'workOrder': return <WorkOrderView targetMonth={globalMonth} clients={st.clients} items={st.items} clientOrders={st.clientOrders} mappings={st.mappings} categorySortOrder={categorySortOrder} {...cx} />;
+      case 'loadingOrder': return <LoadingOrderView clients={st.clients} clientOrders={st.clientOrders} {...cx} />;
+      case 'users': return <DataManagerView title="사용자 관리" data={st.users} setData={v=>updateSt('users',v)} filename="사용자" fields={[{key:'id',label:'ID',inlineEditable:true},{key:'password',label:'PW',hideInList:true},{key:'name',label:'이름',inlineEditable:true},{key:'role',label:'시스템권한',type:'select',inlineEditable:true,options:[{value:'admin',label:'최고관리자'},{value:'office',label:'사무/발주팀'},{value:'logistics',label:'물류/현장팀'}]},{key:'jobType',label:'업무분야',type:'select',inlineEditable:true,options:[{value:'담당자',label:'담당자'},{value:'기사',label:'배송기사'},{value:'작업자',label:'작업자'}]},{key:'vehicle',label:'매칭차량(기사용)',inlineEditable:true},{key:'contact',label:'연락처',inlineEditable:true},{key:'note',label:'비고',inlineEditable:true}]} {...cx} />;
+      case 'items': return <DataManagerView title="품목(소분) 관리" data={si} setData={v=>updateSt('items',v)} filename="품목" fields={[{key:'category',label:'분류',inlineEditable:true},{key:'id',label:'코드',hideInList:true},{key:'name',label:'품명',inlineEditable:true},{key:'unit',label:'단위',inlineEditable:true},{key:'boxQuantity',label:'입수(박스당)',type:'number',inlineEditable:true},{key:'unitPrice',label:'단가',type:'number',inlineEditable:true},{key:'supplierId',label:'거래처',type:'select',inlineEditable:true,options:(st.suppliers||[]).map(s=>({label:s.name,value:s.id}))},{key:'isSubPackage',label:'소분여부',type:'select',inlineEditable:true,options:[{value:'false',label:'일반(Box)'},{value:'true',label:'소분(낱개)'}]},{key:'parentItemId',label:'원품목(박스)',type:'select',inlineEditable:true,options:[{value:'',label:'해당없음'},...si.map(i=>({label:i.name,value:i.id}))]}]} {...cx} />;
+      case 'suppliers': return <DataManagerView title="거래처 관리" data={st.suppliers} setData={v=>updateSt('suppliers',v)} filename="거래처" fields={[{key:'id',label:'코드',hideInList:true},{key:'name',label:'거래처명',inlineEditable:true},{key:'manager',label:'담당자',inlineEditable:true},{key:'contact',label:'연락처',inlineEditable:true},{key:'accountInfo',label:'계좌정보',inlineEditable:true},{key:'note',label:'비고',inlineEditable:true}]} {...cx} />;
+      case 'clients': return <DataManagerView title="보건소 관리 (업무별 담당자)" data={st.clients} setData={v=>updateSt('clients',v)} filename="보건소" fields={[{key:'id',label:'코드',hideInList:true},{key:'name',label:'기관명',inlineEditable:false},{key:'shortName',label:'호칭',inlineEditable:true},{key:'orderManager',label:'발주담당자',inlineEditable:true},{key:'orderContact',label:'발주연락처',inlineEditable:true},{key:'deliveryManager',label:'배송담당자',inlineEditable:true},{key:'deliveryContact',label:'배송연락처',inlineEditable:true},{key:'contractManager',label:'계약담당자',inlineEditable:true},{key:'inspectLocation',label:'하차/검수장소',inlineEditable:true}]} {...cx} />;
       case 'clientMapping': return <ClientItemMappingView clients={st.clients} items={si} clientItemMappings={st.mappings} setClientItemMappings={v=>updateSt('mappings',v)} {...cx} />;
       case 'schedule': return <ScheduleManagement clients={st.clients} clientOrders={st.clientOrders} setClientOrders={v=>updateSt('clientOrders',v)} weekMappings={st.weekMappings} setWeekMappings={v=>updateSt('weekMappings',v)} {...cx} />;
       case 'clientOrder': return <OrderDocView clients={st.clients} clientOrders={st.clientOrders} setClientOrders={v=>updateSt('clientOrders',v)} items={si} sortedItems={si} clientItemMappings={st.mappings} lossRates={st.lossRates} itemLossRates={st.itemLossRates} {...cx} />;
       case 'orderSummary': return <OrderSummaryCalculationView clients={st.clients} items={si} suppliers={st.suppliers} clientOrders={st.clientOrders} lossRates={st.lossRates} setLossRates={v=>updateSt('lossRates',v)} itemLossRates={st.itemLossRates} setItemLossRates={v=>updateSt('itemLossRates',v)} sortOrder={categorySortOrder} weekMappings={st.weekMappings} clientItemMappings={st.mappings} {...cx} />;
       case 'purchaseOrder': return <PurchaseOrderManagement items={si} clients={st.clients} suppliers={st.suppliers} setSuppliers={v=>updateSt('suppliers',v)} clientOrders={st.clientOrders} setClientOrders={v=>updateSt('clientOrders',v)} purchaseRequests={st.purchaseRequests} setPurchaseRequests={v=>updateSt('purchaseRequests',v)} lossRates={st.lossRates} itemLossRates={st.itemLossRates} payments={st.payments} setPayments={v=>updateSt('payments',v)} weekMappings={st.weekMappings} clientItemMappings={st.mappings} {...cx} />;
+      case 'contracts': return <ContractsManagementView clients={st.clients} suppliers={st.suppliers} contracts={st.contracts||[]} setContracts={v=>updateSt('contracts',v)} {...cx} />;
       case 'receipt': return <ReceiptManagement purchaseRequests={st.purchaseRequests} setPurchaseRequests={v=>updateSt('purchaseRequests',v)} payments={st.payments} setPayments={v=>updateSt('payments',v)} suppliers={st.suppliers} items={si} {...cx} />;
-      case 'routing': return <DeliveryRoutingView />;
+      case 'settlementList': return <SettlementView clients={st.clients} clientOrders={st.clientOrders} items={si} priceMappings={st.priceMappings||[]} globalMonth={globalMonth} />;
       case 'inventory': return <InventoryView />;
       case 'payment': return <PaymentView payments={st.payments} setPayments={v=>updateSt('payments',v)} suppliers={st.suppliers} purchaseRequests={st.purchaseRequests} {...cx} />;
+      case 'systemCheck': return <SystemCheckView />;
       default: return <DashboardView items={si} clients={st.clients} clientOrders={st.clientOrders} payments={st.payments} logs={st.systemLogs} onExport={exp} onImport={imp} sortOrder={categorySortOrder} setOrder={v=>updateSt('categorySortOrder',v)} {...cx} />;
     }
   };
@@ -1016,22 +1381,49 @@ function MainApp() {
   return (
     <div className="flex h-screen bg-gray-300 font-sans overflow-hidden notranslate" translate="no">
       <div className="flex w-full h-full bg-[#f0f2f5] relative">
-        <aside className="w-60 bg-[#231815] text-gray-300 flex flex-col z-20 shadow-[4px_0_24px_rgba(0,0,0,0.1)] flex-none">
-          <div className="p-6 border-b border-white/10 text-center"><img src="/logo.png" alt="웰쉐어 로고" className="w-24 mx-auto mb-3 hover:scale-105 transition-transform drop-shadow-lg" /><h1 className="text-[13px] text-white font-black tracking-wide">웰쉐어 영양플러스 발주</h1></div>
-          <div className="p-4 border-b border-white/10 bg-black/20"><p className="text-[9px] text-gray-500 font-bold tracking-wider mb-2 uppercase text-center">데이터 백업/복원</p>{cUser ? (<div className="flex gap-1.5"><button onClick={exp} className="flex-1 py-1.5 bg-white/5 border border-white/10 rounded text-[10px] font-black hover:bg-white/10 text-gray-300 transition-colors">Export</button><button onClick={()=>document.getElementById('sys-import-sb').click()} className="flex-1 py-1.5 bg-purple-600/20 border border-purple-500/30 rounded text-[10px] font-black text-purple-300 hover:bg-purple-600/40 transition-colors">Import</button><input type="file" id="sys-import-sb" className="hidden" accept=".json" onChange={imp} /></div>) : <p className="text-[10px] text-gray-600 text-center">로그인 필요</p>}</div>
+        <aside className="w-64 bg-white text-slate-600 flex flex-col z-20 border-r border-slate-200 shadow-[4px_0_24px_rgba(0,0,0,0.02)] flex-none">
+          <div className="p-6 border-b border-slate-100 text-center"><img src="/logo.png" alt="웰쉐어 로고" className="w-32 mx-auto mb-3 hover:scale-105 transition-transform drop-shadow-sm" /><h1 className="text-[14px] text-slate-800 font-black tracking-wide">웰쉐어 영양플러스</h1><p className="text-[10px] font-bold text-[#29B4E3] mt-1">가치를 살리는 협동</p></div>
+          <div className="p-4 border-b border-slate-100 bg-slate-50/50"><p className="text-[9px] text-slate-400 font-bold tracking-wider mb-2 uppercase text-center">클라우드 DB 동기화</p>{cUser ? (<div className="flex flex-col gap-1.5"><div className="flex gap-1.5"><button onClick={exp} className="flex-1 py-1.5 bg-white border border-slate-200 shadow-sm rounded text-[10px] font-black hover:bg-slate-50 text-slate-600 transition-colors">로컬PC 백업</button><button onClick={()=>document.getElementById('sys-import-sb').click()} className="flex-1 py-1.5 bg-[#f3e8fd] border border-[#d6bdf0] shadow-sm rounded text-[10px] font-black text-[#8b2f97] hover:bg-[#e8d5f8] transition-colors">수동 복원</button><input type="file" id="sys-import-sb" className="hidden" accept=".json" onChange={imp} /></div><button onClick={migrateToCloud} className="w-full py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded text-[10px] font-black shadow-md transition-all flex items-center justify-center gap-1 animate-pulse"><Ic.Cloud size={14}/>클라우드 영구저장 전환</button></div>) : <p className="text-[10px] text-slate-400 text-center">로그인 필요</p>}</div>
           <nav className="flex-1 py-4 overflow-y-auto">
-             <ul className="px-3 space-y-1">
-                {menuItems.filter(m => m.roles.includes(cUser?.role || 'admin')).map(m => { 
-                   const Icon = m.i; 
+             <div className="px-3 space-y-2">
+                {[
+                  { name: '기초자료관리', id: 'cat_basic', items: ['clients', 'users', 'items', 'suppliers'] },
+                  { name: '계약관리', id: 'cat_contract', items: ['contracts', 'priceMapping'] },
+                  { name: '일정관리', id: 'cat_schedule', items: ['schedule'] },
+                  { name: '명단관리', id: 'cat_roster', items: ['roster1', 'roster2'] },
+                  { name: '발주관리', id: 'cat_order', items: ['clientMapping', 'clientOrder', 'purchaseOrder', 'receipt', 'orderSummary'] },
+                  { name: '작업관리', id: 'cat_work', items: ['workOrder', 'packagePrint', 'powderData'] },
+                  { name: '배송관리', id: 'cat_delivery', items: ['deliveryBlock', 'loadingOrder', 'deliveryStatus', 'publicPortal'] },
+                  { name: '정산/청구관리', id: 'cat_billing', items: ['settlementList', 'payment'] },
+                  { name: '시스템관리', id: 'cat_system', items: ['systemCheck'] }
+                ].map(cat => {
+                   const catItems = menuItems.filter(m => cat.items.includes(m.id) && m.roles.includes(cUser?.role || 'admin'));
+                   if (catItems.length === 0) return null;
+                   const isOpen = openMenuCats[cat.id];
                    return (
-                     <li key={m.id}>
-                        <button onClick={()=>{ if(m.isExt) { window.open(m.url, '_blank'); } else { setAc(m.id); } }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-black transition-all ${ac===m.id && !m.isExt ?'bg-gradient-to-r from-[#8b2f97] to-[#e83d8a] text-white shadow-lg':'hover:bg-white/5 text-gray-400 hover:text-white'}`}>
-                           <Icon size={18}/>{m.l}
+                     <div key={cat.id} className="mb-2">
+                        <button onClick={() => setOpenMenuCats(p => ({...p, [cat.id]: !isOpen}))} className="w-full flex items-center justify-between px-3 py-2 text-[11px] font-black text-slate-400 uppercase tracking-wider hover:text-[#E94287] transition-colors">
+                           <span>{cat.name}</span>
+                           <Ic.Down size={14} className={`transform transition-transform ${isOpen ? 'rotate-180 text-[#E94287]' : ''}`} />
                         </button>
-                     </li>
-                   ); 
+                        {isOpen && (
+                          <ul className="mt-1 space-y-1">
+                             {catItems.map(m => {
+                                const Icon = m.i;
+                                return (
+                                  <li key={m.id}>
+                                     <button onClick={()=>{ if(m.isExt) { window.open(m.url, '_blank'); } else { setAc(m.id); } }} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-xs font-black transition-all ${ac===m.id && !m.isExt ?'bg-gradient-to-r from-[#8b2f97] to-[#e83d8a] text-white shadow-md shadow-pink-200':'hover:bg-slate-50 text-slate-600 hover:text-[#8b2f97]'}`}>
+                                        <Icon size={18}/>{m.l}
+                                     </button>
+                                  </li>
+                                );
+                             })}
+                          </ul>
+                        )}
+                     </div>
+                   );
                 })}
-             </ul>
+             </div>
           </nav>
         </aside>
         
@@ -1039,13 +1431,13 @@ function MainApp() {
           <header className="h-16 bg-white border-b flex items-center px-6 shadow-sm z-10 flex-none gap-4">
             <div className="font-black text-sm flex items-center gap-3 shrink-0"><img src="/logo.png" alt="로고" className="w-6 h-6 sm:hidden object-contain drop-shadow-sm" /><span className="hidden sm:inline">웰쉐어 사회적협동조합</span> <span className="hidden lg:inline font-bold text-gray-400 text-xs">"가치를 살리는 협동"</span></div>
             {cUser && (<div className="flex items-center bg-indigo-50 border border-indigo-200 rounded-full px-4 py-1.5 shadow-inner ml-auto shrink-0 transition-colors hover:bg-indigo-100"><Ic.Cal size={16} className="text-indigo-600 mr-2" /><span className="text-xs font-black text-indigo-800 mr-2 hidden sm:inline">작업월지정:</span><input type="month" value={globalMonth} onChange={e => setGlobalMonth(e.target.value)} className="bg-transparent text-sm font-black text-[#E94287] outline-none cursor-pointer" /></div>)}
-            <div className="flex items-center gap-4 shrink-0">{cUser ? (<><span className="text-[10px] font-black px-2 py-1 rounded border text-slate-500 hidden md:inline-block">{cUser.role === 'admin' ? '최고관리자' : (cUser.role === 'office' ? '사무/발주팀' : '물류/현장팀')}</span><span className="text-xs font-bold bg-gray-100 px-3 py-1.5 rounded-full text-blue-700 whitespace-nowrap">{cUser.name}님</span><button onClick={handleLogout} className="text-xs border px-3 py-1.5 rounded-lg hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 transition-colors font-bold whitespace-nowrap">로그아웃</button></>) : (<button onClick={()=>setLm(true)} className="bg-black text-white text-xs px-4 py-2 rounded-xl font-black ml-auto">로그인</button>)}</div>
+            <div className="flex items-center gap-4 shrink-0">{cUser ? (<><span className="text-[10px] font-black px-2 py-1 rounded border text-slate-500 hidden md:inline-block">{cUser.role === 'admin' ? '최고관리자' : (cUser.role === 'office' ? '사무/발주팀' : '물류/현장팀')}</span><span className="text-xs font-bold bg-[#f3e8fd] px-3 py-1.5 rounded-full text-[#8b2f97] whitespace-nowrap">{cUser.name}님</span><button onClick={handleLogout} className="text-xs border px-3 py-1.5 rounded-lg hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 transition-colors font-bold whitespace-nowrap">로그아웃</button></>) : (<button onClick={()=>setLm(true)} className="bg-[#29B4E3] hover:bg-[#209bc5] text-white shadow-md text-xs px-5 py-2.5 rounded-xl font-black ml-auto transition-colors">로그인</button>)}</div>
           </header>
           <div className="flex-1 overflow-auto p-6 lg:p-8 relative z-0">{cUser ? rdr() : (<div className="flex h-full items-center justify-center flex-col text-slate-400 opacity-60"><Ic.Lock size={80} className="mb-4 text-slate-300" /><h2 className="text-2xl font-black text-slate-500">데이터 접근이 차단되었습니다</h2><p className="text-sm font-bold mt-2 text-slate-400">좌측 하단의 [로그인] 버튼을 눌러 권한을 인증해 주세요.</p></div>)}</div>
 
           {lm && (
             <div className="absolute inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm overflow-y-auto pt-[140px] pb-[100px] px-4 sm:px-8 animate-fade-in notranslate" translate="no" style={{ display: 'block' }}>
-              <div className="bg-white p-8 rounded-[2.5rem] w-full max-w-sm flex flex-col shadow-2xl relative border border-slate-200 mx-auto"><div className="flex-none flex justify-end mb-2"><button onClick={()=>setLm(false)} className="p-2 bg-gray-100 rounded-full hover:text-red-500"><Ic.X size={18}/></button></div><div className="overflow-y-auto flex flex-col justify-center px-1 py-4" style={{ height: '400px' }}><div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6"><Ic.Lock size={32}/></div><h2 className="text-2xl font-black mb-8 text-center text-gray-800">보안 로그인</h2><form id="loginForm" onSubmit={handleLoginSubmit} className="space-y-4"><input name="id" value={loginForm.id} onChange={e=>setLoginForm({...loginForm, id: e.target.value})} placeholder="아이디" className="w-full border-2 border-gray-200 p-4 rounded-xl text-sm font-black bg-gray-50 outline-none focus:border-blue-500" required autoFocus/><input name="pwd" value={loginForm.pwd} onChange={e=>setLoginForm({...loginForm, pwd: e.target.value})} type="password" placeholder="비밀번호" className="w-full border-2 border-gray-200 p-4 rounded-xl text-sm font-black bg-gray-50 outline-none focus:border-blue-500" required/><div className="flex items-center justify-between mt-2 px-1"><label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-600 hover:text-blue-600 transition-colors"><input type="checkbox" checked={loginForm.saveId} onChange={e=>setLoginForm({...loginForm, saveId: e.target.checked})} className="w-4 h-4 rounded text-blue-600 accent-blue-600" /> ID 저장</label><label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-600 hover:text-blue-600 transition-colors"><input type="checkbox" checked={loginForm.keepLog} onChange={e=>setLoginForm({...loginForm, keepLog: e.target.checked})} className="w-4 h-4 rounded text-blue-600 accent-blue-600" /> 로그인 유지</label></div></form></div><div className="flex-none mt-6 rounded-b-[2.5rem]"><button type="submit" form="loginForm" className="w-full bg-[#8b2f97] hover:bg-[#72267c] text-white p-4 rounded-xl font-black text-sm shadow-md transition-colors">시스템 접속</button></div></div>
+              <div className="bg-white p-8 rounded-[2.5rem] w-full max-w-sm flex flex-col shadow-2xl relative border border-slate-200 mx-auto"><div className="flex-none flex justify-end mb-2"><button onClick={()=>setLm(false)} className="p-2 bg-gray-100 rounded-full hover:text-red-500"><Ic.X size={18}/></button></div><div className="overflow-y-auto flex flex-col justify-center px-1 py-4" style={{ height: '400px' }}><div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 drop-shadow-md"><img src="/logo.png" alt="로고" className="w-16 object-contain" /></div><h2 className="text-xl font-black mb-1 text-center text-slate-800">웰쉐어 영양플러스</h2><p className="text-xs font-bold text-center text-[#29B4E3] mb-8">가치를 살리는 협동</p><form id="loginForm" onSubmit={handleLoginSubmit} className="space-y-4"><input name="id" value={loginForm.id} onChange={e=>setLoginForm({...loginForm, id: e.target.value})} placeholder="아이디" className="w-full border-2 border-slate-100 p-4 rounded-xl text-sm font-black bg-slate-50 outline-none focus:border-[#E94287]" required autoFocus/><input name="pwd" value={loginForm.pwd} onChange={e=>setLoginForm({...loginForm, pwd: e.target.value})} type="password" placeholder="비밀번호" className="w-full border-2 border-slate-100 p-4 rounded-xl text-sm font-black bg-slate-50 outline-none focus:border-[#E94287]" required/><div className="flex items-center justify-between mt-2 px-1"><label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-600 hover:text-[#8b2f97] transition-colors"><input type="checkbox" checked={loginForm.saveId} onChange={e=>setLoginForm({...loginForm, saveId: e.target.checked})} className="w-4 h-4 rounded text-[#8b2f97] accent-[#8b2f97]" /> ID 저장</label><label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-600 hover:text-[#8b2f97] transition-colors"><input type="checkbox" checked={loginForm.keepLog} onChange={e=>setLoginForm({...loginForm, keepLog: e.target.checked})} className="w-4 h-4 rounded text-[#8b2f97] accent-[#8b2f97]" /> 로그인 유지</label></div></form></div><div className="flex-none mt-6 rounded-b-[2.5rem]"><button type="submit" form="loginForm" className="w-full bg-gradient-to-r from-[#8b2f97] to-[#E94287] hover:shadow-lg hover:scale-[1.02] text-white p-4 rounded-xl font-black text-sm shadow-md transition-all">시스템 접속</button></div></div>
             </div>
           )}
         </main>
@@ -1069,6 +1461,7 @@ export default function App() {
       document.head.appendChild(s);
     }
     if(!document.getElementById('tw')) { const t = document.createElement('script'); t.id='tw'; t.src='https://cdn.tailwindcss.com'; t.onload=()=>setSLd(true); t.onerror=()=>setSLd(true); document.head.appendChild(t); } else setSLd(true); 
+    if(!document.getElementById('iamport')) { const s = document.createElement('script'); s.id='iamport'; s.src='https://cdn.iamport.kr/v1/iamport.js'; document.head.appendChild(s); }
   }, []);
   return sLd ? <ErrorBoundary><MainApp /></ErrorBoundary> : <div className="flex h-screen items-center justify-center font-black bg-slate-50 notranslate" translate="no"><Ic.Serv size={40} className="animate-pulse text-purple-600"/><p className="font-black text-slate-500 ml-3">시스템 로딩중...</p></div>;
 }

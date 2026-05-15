@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "target": "erp",
     "public": "dist",
     "ignore": [
       "firebase.json",
