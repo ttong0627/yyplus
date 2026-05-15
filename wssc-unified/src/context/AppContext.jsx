@@ -83,7 +83,11 @@ async function runTmsMigration(db) {
 // wssc-erp-v2(단일 doc) + wssc-work-order(wssc_state 컬렉션) → wssc_unified 통합 마이그레이션
 const WO_APP_IDS = ['wssc-production', 'default-app-id', '1:845373489879:web:acf85d5395f0739d0b2692'];
 
+const isNonEmpty = v => Array.isArray(v) ? v.length > 0 : (v && typeof v === 'object' && Object.keys(v).length > 0);
+
 async function runLegacyMigration(db) {
+  const log = [];
+
   // 1) wssc-erp-v2: 단일 doc (main_state)
   let erpData = null;
   for (const pathParts of LEGACY_PATHS) {
@@ -91,7 +95,12 @@ async function runLegacyMigration(db) {
       const snap = await getDoc(doc(db, ...pathParts));
       if (snap.exists()) {
         const d = snap.data();
-        if (d && (Array.isArray(d.users) || Array.isArray(d.clients))) { erpData = d; break; }
+        if (d && (Array.isArray(d.users) || Array.isArray(d.clients))) {
+          erpData = d;
+          log.push(`ERP소스: ${pathParts.join('/')}`);
+          log.push(...Object.keys(d).map(k => `  ${k}: ${Array.isArray(d[k]) ? d[k].length + '건' : typeof d[k]}`));
+          break;
+        }
       }
     } catch { /* 권한 없음 */ }
   }
@@ -104,6 +113,8 @@ async function runLegacyMigration(db) {
       if (!cs.empty) {
         woData = {};
         cs.forEach(d => { woData[d.id] = d.data().data; });
+        log.push(`워크오더소스: wssc_state appId=${appId}`);
+        log.push(...Object.keys(woData).map(k => `  ${k}: ${Array.isArray(woData[k]) ? woData[k].length + '건' : typeof woData[k]}`));
         break;
       }
     } catch { /* 없음 */ }
@@ -111,27 +122,41 @@ async function runLegacyMigration(db) {
 
   if (!erpData && !woData) throw new Error('기존 DB를 찾을 수 없습니다. Firestore 권한 또는 데이터가 없습니다.');
 
-  // 3) 병합: ERP 우선, 워크오더로 packageOrders·workSchedules 보완
-  const merged = {};
+  // 3) 현재 wssc_unified 데이터 읽기 (기존 비빈 데이터는 보존)
+  const existSnap = await getDocs(collection(db, COLL)).catch(() => null);
+  const existing = {};
+  if (existSnap) existSnap.forEach(d => { existing[d.id] = d.data().data; });
+
+  // 4) 병합: 소스 우선 (단, 소스가 비어있으면 기존 wssc_unified 값 유지)
+  const merged = { ...existing };
+
+  // ERP 데이터 적용 (비어있지 않은 필드만)
   if (erpData) {
-    Object.keys(INITIAL_STATE).forEach(k => { if (erpData[k] !== undefined) merged[k] = erpData[k]; });
-  }
-  if (woData) {
-    ['packageOrders', 'workSchedules'].forEach(k => { if (woData[k]) merged[k] = woData[k]; });
-    Object.keys(woData).forEach(k => {
-      if (Object.keys(INITIAL_STATE).includes(k) && (!merged[k] || (Array.isArray(merged[k]) && merged[k].length === 0)))
-        merged[k] = woData[k];
+    Object.keys(INITIAL_STATE).forEach(k => {
+      if (erpData[k] !== undefined && isNonEmpty(erpData[k])) merged[k] = erpData[k];
     });
   }
 
-  // 4) admin 사용자 보장
-  const users = Array.isArray(merged.users) ? [...merged.users] : [];
+  // 워크오더 데이터 보완 (ERP에서 비었던 키 채우기 + packageOrders·workSchedules 우선)
+  if (woData) {
+    Object.keys(woData).forEach(k => {
+      if (!Object.keys(INITIAL_STATE).includes(k)) return;
+      if (!isNonEmpty(merged[k]) && isNonEmpty(woData[k])) merged[k] = woData[k];
+    });
+    ['packageOrders', 'workSchedules'].forEach(k => {
+      if (isNonEmpty(woData[k])) merged[k] = woData[k];
+    });
+  }
+
+  // 5) admin 사용자 보장
+  const users = Array.isArray(merged.users) ? [...merged.users] : [DEFAULT_ADMIN];
   if (!users.find(u => u.id === 'admin')) users.push(DEFAULT_ADMIN);
   merged.users = users;
 
-  // 5) wssc_unified에 저장
+  // 6) 비어있지 않은 키만 wssc_unified에 저장
+  const toWrite = Object.keys(merged).filter(k => isNonEmpty(merged[k]));
   await Promise.all(
-    Object.keys(merged).map(k => setDoc(doc(db, COLL, k), { data: JSON.parse(JSON.stringify(merged[k])) }))
+    toWrite.map(k => setDoc(doc(db, COLL, k), { data: JSON.parse(JSON.stringify(merged[k])) }))
   );
 
   return {
@@ -143,6 +168,7 @@ async function runLegacyMigration(db) {
     packageOrders: (merged.packageOrders || []).length,
     priceMappings: (merged.priceMappings || []).length,
     users: users.length,
+    log,
   };
 }
 

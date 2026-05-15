@@ -141,12 +141,20 @@ export default function SystemPage() {
             {legacyMigrating ? '⏳ 가져오는 중...' : '⚡ 기존 ERP/워크오더 전체 가져오기'}
           </button>
           {legacyResult && (
-            <div className="text-xs font-bold rounded-lg px-4 py-2"
-              style={{ background: 'rgba(16,185,129,0.1)', color: '#34d399', border: '1px solid rgba(16,185,129,0.25)' }}>
-              ✅ 완료 — 보건소 {legacyResult.clients}개 · 품목 {legacyResult.items}개 ·
-              거래처 {legacyResult.suppliers}개 · 발주 {legacyResult.clientOrders}개 ·
-              단가매핑 {legacyResult.priceMappings}개 · 패키지 {legacyResult.packageOrders}개 ·
-              사용자 {legacyResult.users}명
+            <div className="w-full mt-3 space-y-2">
+              <div className="text-xs font-bold rounded-lg px-4 py-2"
+                style={{ background: 'rgba(16,185,129,0.1)', color: '#34d399', border: '1px solid rgba(16,185,129,0.25)' }}>
+                ✅ 완료 — 보건소 {legacyResult.clients}개 · 품목 {legacyResult.items}개 ·
+                거래처 {legacyResult.suppliers}개 · 발주 {legacyResult.clientOrders}개 ·
+                품목매핑 {legacyResult.mappings}개 · 단가매핑 {legacyResult.priceMappings}개 ·
+                패키지 {legacyResult.packageOrders}개 · 사용자 {legacyResult.users}명
+              </div>
+              {legacyResult.log?.length > 0 && (
+                <div className="rounded-lg px-4 py-2 text-xs font-mono"
+                  style={{ background: 'rgba(30,40,80,0.6)', color: '#64748b', border: '1px solid rgba(30,40,80,0.8)' }}>
+                  {legacyResult.log.map((line, i) => <div key={i}>{line}</div>)}
+                </div>
+              )}
             </div>
           )}
         </div>
