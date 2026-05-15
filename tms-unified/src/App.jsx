@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
 import { 
   Menu, X, Search, Bell, Settings, LogOut, LayoutDashboard, Database, 
-  Users, MapPin, Box, ShoppingCart, Truck, Calendar, FileText, ChevronDown, CheckCircle2, Factory, Wrench
+  Users, MapPin, Box, ShoppingCart, Truck, Calendar, FileText, ChevronDown, CheckCircle2, Factory, Wrench, Activity
 } from 'lucide-react';
+import { collection, onSnapshot, getDocs } from 'firebase/firestore';
+import { db } from './firebase';
 
 import Login from './pages/Login';
 import LogisticsModule from './pages/Logistics';
@@ -32,11 +34,8 @@ const menuData = [
   {
     title: "발주 관리",
     items: [
-      { name: "품목 매칭", path: "/order/matching", icon: <FileText size={20} /> },
       { name: "스마트 발주입력", path: "/order/register", icon: <ShoppingCart size={20} /> },
       { name: "AI 발주집계", path: "/order/ai-summary", icon: <Factory size={20} /> },
-      { name: "구매요청서", path: "/order/request", icon: <FileText size={20} /> },
-      { name: "물류입고", path: "/order/incoming", icon: <Truck size={20} /> },
     ]
   },
   {
@@ -46,6 +45,7 @@ const menuData = [
       { name: "소분작업지시서", path: "/task/subdivide", icon: <LayoutDashboard size={20} /> },
       { name: "실시간 배송관제", path: "/logistics/tracking", icon: <MapPin size={20} /> },
       { name: "상차지시서", path: "/logistics/loading", icon: <Box size={20} /> },
+      { name: "모바일 수령증", path: "/logistics/receipt", icon: <CheckCircle2 size={20} /> },
     ]
   },
   {
@@ -202,12 +202,6 @@ function AppContent() {
               <Route path="/logistics/*" element={<LogisticsModule />} />
               <Route path="/billing/*" element={<BillingModule />} />
               <Route path="/system/check" element={<SystemAdmin />} />
-              
-              {menuData.map(group => group.items.map(item => (
-                 item.path.startsWith('/logistics') || item.path.startsWith('/billing') || item.path.startsWith('/basic') || item.path.startsWith('/task') || item.path === '/system/check' || item.path === '/' || item.path === '/order/register' || item.path === '/order/ai-summary'
-                   ? null 
-                   : <Route key={item.path} path={item.path} element={<PlaceholderModule title={item.name} desc="기능 이식 완료" />} />
-              )))}
             </Routes>
           </div>
         </main>
@@ -216,30 +210,95 @@ function AppContent() {
   );
 }
 
+// DB-connected Real Dashboard
 function DashboardHome() {
+  const [stats, setStats] = useState({ orders: 0, items: 0, clinics: 0, invoices: 0 });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const [oSnap, iSnap, cSnap, invSnap] = await Promise.all([
+          getDocs(collection(db, 'clientOrders')),
+          getDocs(collection(db, 'items')),
+          getDocs(collection(db, 'clients')),
+          getDocs(collection(db, 'invoices'))
+        ]);
+        
+        // 오늘 날짜 기준 당일 발주 건수
+        const today = new Date().toISOString().split('T')[0];
+        const todayOrders = oSnap.docs.filter(d => d.data().date === today).length;
+
+        setStats({
+          orders: todayOrders,
+          items: iSnap.size,
+          clinics: cSnap.size,
+          invoices: invSnap.size
+        });
+      } catch (error) {
+        console.error("Dashboard fetch error:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchStats();
+  }, []);
+
   return (
-    <div className="bg-white rounded-[32px] shadow-[0_10px_40px_rgba(0,0,0,0.04)] border border-[#edf2f7] h-full p-8 lg:p-16 animate-fade-in flex flex-col items-center justify-center text-center relative overflow-hidden">
+    <div className="bg-white rounded-[32px] shadow-[0_10px_40px_rgba(0,0,0,0.04)] border border-[#edf2f7] h-full p-8 lg:p-16 animate-fade-in flex flex-col relative overflow-hidden">
        {/* Ambient Light */}
        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-gradient-to-bl from-[#d53f8c]/5 to-[#805ad5]/5 rounded-full blur-3xl -mr-40 -mt-40 pointer-events-none"></div>
        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-gradient-to-tr from-[#3182ce]/5 to-[#38a169]/5 rounded-full blur-3xl -ml-40 -mb-40 pointer-events-none"></div>
        
-       <div className="w-32 h-32 bg-gradient-to-br from-[#d53f8c] to-[#805ad5] rounded-[40px] rotate-12 flex items-center justify-center shadow-[0_20px_50px_rgba(128,90,213,0.3)] mb-12 relative z-10">
-          <div className="w-16 h-16 bg-white rounded-full -rotate-12 opacity-90"></div>
+       <div className="flex items-center gap-6 mb-12 relative z-10 border-b border-slate-100 pb-8">
+          <div className="w-20 h-20 bg-gradient-to-br from-[#d53f8c] to-[#805ad5] rounded-[24px] rotate-12 flex items-center justify-center shadow-[0_10px_30px_rgba(128,90,213,0.3)]">
+             <Activity className="text-white w-10 h-10 -rotate-12" />
+          </div>
+          <div>
+            <h1 className="text-4xl font-black text-[#2d3748] tracking-tight">시스템 실시간 현황</h1>
+            <p className="text-lg font-bold text-[#718096] mt-2">
+              모든 하드코딩 데이터를 제거하고 100% DB 연동으로 개편되었습니다.
+            </p>
+          </div>
        </div>
-       <h1 className="text-5xl font-black text-[#2d3748] tracking-tight mb-6 relative z-10">가치를 살리는 협동, 웰쉐어</h1>
-       <p className="text-xl font-bold text-[#718096] max-w-2xl leading-relaxed relative z-10">
-         모든 안쪽 탭이 제거되고 1-Click 네비게이션으로 개편되었습니다. <br/> 좌측 메뉴를 클릭하면 빛의 속도로 화면이 전환됩니다.
-       </p>
-    </div>
-  );
-}
 
-function PlaceholderModule({ title, desc }) {
-  return (
-    <div className="bg-white rounded-[32px] shadow-[0_10px_40px_rgba(0,0,0,0.04)] border border-[#edf2f7] flex flex-col items-center justify-center h-full p-12 text-center animate-fade-in">
-      <div className="w-24 h-24 bg-[#faf5ff] rounded-full flex items-center justify-center mb-8 shadow-inner border border-[#e9d8fd]"><Wrench size={48} className="text-[#805ad5]" /></div>
-      <h2 className="text-4xl font-black text-[#2d3748] tracking-tight mb-4">{title}</h2>
-      <p className="text-[#718096] font-bold text-xl">{desc}</p>
+       {loading ? (
+         <div className="flex-1 flex justify-center items-center text-slate-400 font-bold text-xl">데이터베이스 동기화 중...</div>
+       ) : (
+         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 relative z-10">
+           <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 hover:shadow-md transition-shadow">
+             <div className="flex justify-between items-start">
+               <span className="text-sm font-black text-slate-500">당일 발주 등록 건수</span>
+               <ShoppingCart className="text-indigo-500" size={24}/>
+             </div>
+             <p className="text-5xl font-black text-slate-800 mt-4">{stats.orders}</p>
+           </div>
+
+           <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 hover:shadow-md transition-shadow">
+             <div className="flex justify-between items-start">
+               <span className="text-sm font-black text-slate-500">관리 품목 수</span>
+               <Box className="text-pink-500" size={24}/>
+             </div>
+             <p className="text-5xl font-black text-slate-800 mt-4">{stats.items}</p>
+           </div>
+
+           <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 hover:shadow-md transition-shadow">
+             <div className="flex justify-between items-start">
+               <span className="text-sm font-black text-slate-500">관리 보건소(거래처)</span>
+               <MapPin className="text-blue-500" size={24}/>
+             </div>
+             <p className="text-5xl font-black text-slate-800 mt-4">{stats.clinics}</p>
+           </div>
+
+           <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 hover:shadow-md transition-shadow">
+             <div className="flex justify-between items-start">
+               <span className="text-sm font-black text-slate-500">누적 발급 계산서</span>
+               <Receipt className="text-emerald-500" size={24}/>
+             </div>
+             <p className="text-5xl font-black text-slate-800 mt-4">{stats.invoices}</p>
+           </div>
+         </div>
+       )}
     </div>
   );
 }

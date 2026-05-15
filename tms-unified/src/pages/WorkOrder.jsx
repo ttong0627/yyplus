@@ -153,17 +153,33 @@ function WorkMatrixView() {
 }
 
 // =========================================================================
-// 간단한 작업 일정 달력 뷰 (Work Schedule)
+// 간단한 작업 일정 달력 뷰 (Work Schedule) - 실제 DB 연동 완료
 // =========================================================================
 function WorkSchedule() {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [orderDates, setOrderDates] = useState({}); // { '2026-05-15': 3 } (발주 건수)
   
-  // 달력 계산 기초
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   
+  useEffect(() => {
+    // 해당 월의 발주 내역을 모두 가져와서 일자별로 집계
+    const targetMonthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
+    const unsub = onSnapshot(collection(db, 'clientOrders'), snap => {
+       const counts = {};
+       snap.docs.forEach(doc => {
+         const data = doc.data();
+         if (data.date && data.date.startsWith(targetMonthStr)) {
+           counts[data.date] = (counts[data.date] || 0) + 1;
+         }
+       });
+       setOrderDates(counts);
+    });
+    return () => unsub();
+  }, [year, month]);
+
   const days = [];
   for(let i=0; i<firstDay; i++) days.push(null);
   for(let i=1; i<=daysInMonth; i++) days.push(i);
@@ -182,22 +198,25 @@ function WorkSchedule() {
           </div>
        </div>
 
-       <div className="grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+       <div className="flex-1 grid grid-cols-7 gap-px bg-slate-200 border border-slate-200 rounded-2xl overflow-hidden shadow-sm min-h-[500px]">
           {['일','월','화','수','목','금','토'].map(d => (
-            <div key={d} className="bg-slate-50 text-center py-3 text-xs font-black text-slate-500">{d}</div>
+            <div key={d} className="bg-slate-50 text-center py-3 text-xs font-black text-slate-500 h-10">{d}</div>
           ))}
           {days.map((d, i) => {
              const isToday = d === new Date().getDate() && month === new Date().getMonth() && year === new Date().getFullYear();
+             const dateStr = d ? `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}` : '';
+             const orderCount = d ? orderDates[dateStr] : 0;
+             
              return (
-               <div key={i} className={`min-h-[100px] p-2 bg-white transition-colors hover:bg-slate-50 ${isToday ? 'bg-indigo-50/30 ring-1 ring-indigo-500 inset-0 z-10' : ''}`}>
+               <div key={i} className={`p-2 bg-white transition-colors hover:bg-slate-50 ${isToday ? 'bg-indigo-50/30 ring-1 ring-indigo-500 inset-0 z-10' : ''}`}>
                   {d && (
                     <div className="flex flex-col h-full">
                        <span className={`text-sm font-bold w-7 h-7 flex items-center justify-center rounded-full ${isToday ? 'bg-indigo-600 text-white' : i%7===0 ? 'text-rose-500' : 'text-slate-700'}`}>
                          {d}
                        </span>
-                       {/* 스케줄 더미 블록 */}
-                       {Math.random() > 0.6 && (
-                         <div className="mt-auto px-2 py-1 bg-emerald-100 border border-emerald-200 rounded text-[10px] font-black text-emerald-700 truncate shadow-sm">작업 예정</div>
+                       {/* 실제 DB 연동 스케줄 블록 */}
+                       {orderCount > 0 && (
+                         <div className="mt-auto px-2 py-1.5 bg-indigo-100 border border-indigo-200 rounded text-xs font-black text-indigo-700 truncate shadow-sm">소분 작업 ({orderCount}건)</div>
                        )}
                     </div>
                   )}
