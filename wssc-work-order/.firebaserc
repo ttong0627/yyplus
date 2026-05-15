@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "wssc-nutrition"
+  },
+  "targets": {
+    "wssc-nutrition": {
+      "hosting": {
+        "workorder": [
+          "wssc-workorder"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
