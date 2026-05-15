@@ -18,9 +18,10 @@ export default function MasterData() {
       <div className="w-full h-full bg-white/70 backdrop-blur-md rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/80 overflow-hidden flex flex-col relative">
          <Routes>
            <Route path="/" element={<Navigate to="/basic/clinic" replace />} />
+           <Route path="clinic-price" element={<DataManager collectionName="clients" title="보건소단가설정" fields={[{k:'name', l:'보건소명'}, {k:'shortName', l:'단축명'}, {k:'unitPrice', l:'박스단가', type:'number'}, {k:'note', l:'비고'}]} />} />
            <Route path="clinic" element={<DataManager collectionName="clients" title="보건소" fields={[{k:'name', l:'보건소명'}, {k:'shortName', l:'단축명(표시용)'}, {k:'manager', l:'담당자'}, {k:'contact', l:'연락처'}, {k:'inspectTime', l:'검수시간'}, {k:'inspectLocation', l:'검수장소'}]} />} />
            <Route path="items" element={<DataManager collectionName="items" title="품목" fields={[{k:'name', l:'품목명'}, {k:'category', l:'분류(미곡/야채/과일 등)'}, {k:'unit', l:'단위'}, {k:'boxQuantity', l:'박스당 수량', type:'number'}, {k:'unitPrice', l:'박스단가', type:'number'}, {k:'supplierId', l:'기본거래처(ID)'}]} />} />
-           <Route path="partners" element={<DataManager collectionName="suppliers" title="거래처" fields={[{k:'name', l:'거래처명'}, {k:'manager', l:'담당자'}, {k:'contact', l:'연락처'}, {k:'account', l:'계좌번호'}, {k:'orderType', l:'발주방식(auto/manual)'}]} />} />
+           <Route path="partners" element={<DataManager collectionName="partners" title="거래처" fields={[{k:'name', l:'거래처명'}, {k:'manager', l:'담당자'}, {k:'contact', l:'연락처'}, {k:'account', l:'계좌번호'}, {k:'orderType', l:'발주방식(auto/manual)'}]} />} />
            <Route path="users" element={<DataManager collectionName="users" title="사용자" fields={[{k:'name', l:'이름'}, {k:'id', l:'로그인ID'}, {k:'role', l:'권한(admin/user)'}, {k:'contact', l:'연락처'}, {k:'note', l:'비고'}]} />} />
          </Routes>
       </div>
