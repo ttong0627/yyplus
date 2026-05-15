@@ -23,13 +23,36 @@ export function OrderRegister() {
     if (!targetDate || !selectedClient) return;
     const unsub = onSnapshot(collection(db, 'clientOrders'), snap => {
       const existing = snap.docs.map(d => ({id: d.id, ...d.data()})).filter(d => d.date === targetDate && d.clientId === selectedClient);
-      let newGrid = Array.from({ length: Math.max(15, existing.length + 3) }, () => ({ itemName: '', reqBoxes: '', fbId: null }));
-      existing.forEach((ex, idx) => { newGrid[idx] = { itemName: ex.itemName, reqBoxes: ex.reqBoxes, fbId: ex.id }; });
+      
+      // 형님의 요청사항 완벽 반영: 하드코딩 빈칸 15개가 아니라, 실데이터(items)를 쫙 뿌려줍니다.
+      let newGrid = [];
+      if (items.length > 0) {
+        // DB에 등록된 모든 실데이터 품목을 기본 폼으로 세팅
+        newGrid = items.map(item => {
+           const match = existing.find(ex => ex.itemName.trim() === item.name.trim());
+           return {
+              itemName: item.name,
+              reqBoxes: match ? match.reqBoxes : '',
+              fbId: match ? match.id : null
+           };
+        });
+      } else {
+        // 품목이 아예 없을 때만 최소한의 빈칸 제공
+        newGrid = Array.from({ length: 15 }, () => ({ itemName: '', reqBoxes: '', fbId: null }));
+      }
+      
+      // 기존 발주 내역 중에 현재 품목DB에 없는 항목(수기입력 등)이 있다면 아래에 추가
+      existing.forEach(ex => {
+        if (!newGrid.find(row => row.itemName.trim() === ex.itemName.trim())) {
+          newGrid.push({ itemName: ex.itemName, reqBoxes: ex.reqBoxes, fbId: ex.id });
+        }
+      });
+      
       setGridData(newGrid);
       setOrders(existing);
     });
     return () => unsub();
-  }, [targetDate, selectedClient]);
+  }, [targetDate, selectedClient, items]);
 
   const handleGridChange = (idx, field, value) => {
     const newData = [...gridData]; newData[idx][field] = value; setGridData(newData);
