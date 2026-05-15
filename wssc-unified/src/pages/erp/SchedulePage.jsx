@@ -54,6 +54,63 @@ export default function SchedulePage() {
 
   const blockColors = { A:'bg-sky-900/50 text-sky-300', B:'bg-amber-900/50 text-amber-300', C:'bg-emerald-900/50 text-emerald-300' };
 
+  const dlExcel = () => {
+    const sorted = [...monthOrders].sort((a,b) => (a.routeSequence||0)-(b.routeSequence||0));
+    let rows = '';
+    sorted.forEach((o, i) => {
+      const c = clients.find(x => x.id === o.clientId);
+      const wd1 = o.deliveryDate1 ? Utils.calculateWorkDate(o.deliveryDate1) : '';
+      const wd2 = o.deliveryDate2 ? Utils.calculateWorkDate(o.deliveryDate2) : '';
+      rows += `<tr>
+        <td class="txt">${o.routeSequence || i+1}</td>
+        <td class="l">${c?.name || o.clientId}</td>
+        <td class="txt">${o.deliveryBlock || ''}</td>
+        <td class="txt">${o.deliveryDate1 || ''}</td>
+        <td class="txt">${wd1 || ''}</td>
+        <td class="txt">${o.deliveryDate2 || ''}</td>
+        <td class="txt">${wd2 || ''}</td>
+        <td class="txt">${o.done1 ? 'O' : ''}</td>
+        <td class="txt">${o.done2 ? 'O' : ''}</td>
+        <td class="l">${c?.contact || ''}</td>
+        <td class="l">${c?.manager || ''}</td>
+      </tr>`;
+    });
+    Utils.dlExcelCustom(`
+      <table>
+        <thead>
+          <tr><td colspan="11" class="hdr">${globalMonth} 작업/배송 일정표</td></tr>
+          <tr><th>순번</th><th>보건소</th><th>블럭</th><th>1차 배송일</th><th>1차 작업일</th><th>2차 배송일</th><th>2차 작업일</th><th>1차완료</th><th>2차완료</th><th>연락처</th><th>담당자</th></tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>`, `배송일정_${globalMonth}`);
+  };
+
+  const doPrint = () => {
+    const sorted = [...monthOrders].sort((a,b) => (a.routeSequence||0)-(b.routeSequence||0));
+    let rows = '';
+    sorted.forEach((o, i) => {
+      const c = clients.find(x => x.id === o.clientId);
+      const wd1 = o.deliveryDate1 ? Utils.calculateWorkDate(o.deliveryDate1) : '';
+      const wd2 = o.deliveryDate2 ? Utils.calculateWorkDate(o.deliveryDate2) : '';
+      rows += `<tr>
+        <td>${o.routeSequence || i+1}</td>
+        <td>${c?.name || o.clientId}</td>
+        <td>${o.deliveryBlock || ''}</td>
+        <td>${o.deliveryDate1 || '-'}</td>
+        <td>${wd1 || '-'}</td>
+        <td>${o.deliveryDate2 || '-'}</td>
+        <td>${wd2 || '-'}</td>
+        <td style="text-align:center">${o.done1 ? '✓' : ''}</td>
+        <td style="text-align:center">${o.done2 ? '✓' : ''}</td>
+      </tr>`;
+    });
+    Utils.printContent(`${globalMonth} 작업/배송 일정표`,
+      `<table><thead>
+        <tr><th colspan="9" style="background:#4f46e5;color:white;font-size:16px;padding:12px">${globalMonth} 작업/배송 일정표</th></tr>
+        <tr><th>순번</th><th>보건소</th><th>블럭</th><th>1차 배송일</th><th>1차 작업일</th><th>2차 배송일</th><th>2차 작업일</th><th>1차완료</th><th>2차완료</th></tr>
+      </thead><tbody>${rows}</tbody></table>`);
+  };
+
   return (
     <div className="space-y-4 max-w-5xl">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -61,7 +118,11 @@ export default function SchedulePage() {
           <h1 className="text-xl font-black text-white">작업/배송 일정 — {globalMonth}</h1>
           <p className="text-sm text-slate-400 mt-0.5">{monthOrders.length}개 보건소 등록 · 미등록 {unregistered.length}개</p>
         </div>
-        <button onClick={openAdd} className="btn-primary flex items-center gap-1.5">{Ic.Plus} 일정 추가</button>
+        <div className="flex gap-2">
+          <button onClick={dlExcel} disabled={!monthOrders.length} className="btn-secondary flex items-center gap-1.5 disabled:opacity-40">{Ic.Down} 엑셀</button>
+          <button onClick={doPrint} disabled={!monthOrders.length} className="btn-secondary flex items-center gap-1.5 disabled:opacity-40">{Ic.Print2} 인쇄</button>
+          <button onClick={openAdd} className="btn-primary flex items-center gap-1.5">{Ic.Plus} 일정 추가</button>
+        </div>
       </div>
 
       {unregistered.length > 0 && (
@@ -82,18 +143,23 @@ export default function SchedulePage() {
         <div className="overflow-x-auto">
           <table className="table-base">
             <thead>
-              <tr><th>순번</th><th>보건소</th><th>블럭</th><th>1차 배송일</th><th>2차 배송일</th><th>1차완료</th><th>2차완료</th><th className="w-24">관리</th></tr>
+              <tr><th>순번</th><th>보건소</th><th>블럭</th><th>1차 배송일</th><th>1차 작업일</th><th>2차 배송일</th><th>2차 작업일</th><th>1차완료</th><th>2차완료</th><th className="w-20">관리</th></tr>
             </thead>
             <tbody>
               {monthOrders.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-10 text-slate-500">이번달 배송 일정이 없습니다.</td></tr>
-              ) : [...monthOrders].sort((a,b) => (a.routeSequence||0)-(b.routeSequence||0)).map(o => (
+                <tr><td colSpan={10} className="text-center py-10 text-slate-500">이번달 배송 일정이 없습니다.</td></tr>
+              ) : [...monthOrders].sort((a,b) => (a.routeSequence||0)-(b.routeSequence||0)).map(o => {
+                const wd1 = o.deliveryDate1 ? Utils.calculateWorkDate(o.deliveryDate1) : null;
+                const wd2 = o.deliveryDate2 ? Utils.calculateWorkDate(o.deliveryDate2) : null;
+                return (
                 <tr key={o.id}>
                   <td className="text-center text-slate-400 font-mono">{o.routeSequence || '-'}</td>
                   <td className="font-black text-white">{clientName(o.clientId)}</td>
                   <td><span className={`badge ${blockColors[o.deliveryBlock] || 'bg-slate-700 text-slate-300'}`}>{o.deliveryBlock || '-'}</span></td>
                   <td className="text-slate-300">{o.deliveryDate1 || '-'}</td>
+                  <td className="text-amber-300 text-xs">{wd1 || '-'}</td>
                   <td className="text-slate-300">{o.deliveryDate2 || '-'}</td>
+                  <td className="text-amber-300 text-xs">{wd2 || '-'}</td>
                   <td className="text-center">{o.done1 ? <span className="text-emerald-400 font-black">✓</span> : <span className="text-slate-600">-</span>}</td>
                   <td className="text-center">{o.done2 ? <span className="text-emerald-400 font-black">✓</span> : <span className="text-slate-600">-</span>}</td>
                   <td><div className="flex gap-1">
@@ -101,7 +167,8 @@ export default function SchedulePage() {
                     <button onClick={() => del(o)} className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-900/30 rounded-lg">{Ic.Trash}</button>
                   </div></td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
